@@ -45,6 +45,20 @@ Parse a PDF:
 curl -F "file=@data/uploads/your-manual.pdf" http://127.0.0.1:8000/parse-pdf
 ```
 
+Docker:
+
+```bash
+docker build -t tabletop-manual-retriever .
+docker run --rm -p 8000:8000 tabletop-manual-retriever
+```
+
+Docker Compose:
+
+```bash
+docker compose up --build -d
+docker compose down
+```
+
 ## Project layout
 
 ```
