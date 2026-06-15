@@ -59,6 +59,13 @@ docker compose up --build -d
 docker compose down
 ```
 
+Services:
+
+```text
+API:    http://127.0.0.1:8000
+Qdrant: http://127.0.0.1:6333
+```
+
 ## Project layout
 
 ```
