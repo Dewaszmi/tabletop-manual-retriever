@@ -32,13 +32,28 @@ Structured JSON output:
 parse-manual data/uploads/your-manual.pdf --json
 ```
 
+## API server
+
+```bash
+pip install -r requirements.txt
+PYTHONPATH=src uvicorn tabletop_manual_retriever.main:app --reload
+```
+
+Parse a PDF:
+
+```bash
+curl -F "file=@data/uploads/your-manual.pdf" http://127.0.0.1:8000/parse-pdf
+```
+
 ## Project layout
 
 ```
 src/tabletop_manual_retriever/
+  main.py        # FastAPI app
   ingest/
     models.py    # ParsedManual, TextBlock
     parser.py    # PDF text extraction
+    router.py    # parse-pdf endpoint
   cli.py         # parse-manual command
 tests/
 data/uploads/    # place test PDFs here
