@@ -32,13 +32,49 @@ Structured JSON output:
 parse-manual data/uploads/your-manual.pdf --json
 ```
 
+## API server
+
+```bash
+pip install -r requirements.txt
+PYTHONPATH=src uvicorn tabletop_manual_retriever.main:app --reload
+```
+
+Parse a PDF:
+
+```bash
+curl -F "file=@data/uploads/your-manual.pdf" http://127.0.0.1:8000/parse-pdf
+```
+
+Docker:
+
+```bash
+docker build -t tabletop-manual-retriever .
+docker run --rm -p 8000:8000 tabletop-manual-retriever
+```
+
+Docker Compose:
+
+```bash
+docker compose up --build -d
+docker compose down
+```
+
+Services:
+
+```text
+API:    http://127.0.0.1:8000
+Qdrant: http://127.0.0.1:6333
+```
+
 ## Project layout
 
 ```
 src/tabletop_manual_retriever/
+  main.py        # FastAPI app
   ingest/
     models.py    # ParsedManual, TextBlock
     parser.py    # PDF text extraction
+    router.py    # parse-pdf endpoint
   cli.py         # parse-manual command
 tests/
 data/uploads/    # place test PDFs here
