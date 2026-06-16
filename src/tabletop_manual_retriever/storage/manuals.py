@@ -37,16 +37,36 @@ def game_dir(game_slug: str) -> Path:
     return UPLOADS_DIR / slug
 
 
-def save_manual(game_slug: str, filename: str, content: bytes) -> Path:
+def manual_path(game_slug: str, filename: str) -> Path:
+    slug = validate_game_slug(game_slug)
+    safe_name = sanitize_pdf_filename(filename)
+    return game_dir(slug) / safe_name
+
+
+def manual_exists(game_slug: str, filename: str) -> bool:
+    return manual_path(game_slug, filename).is_file()
+
+
+def save_manual(
+    game_slug: str,
+    filename: str,
+    content: bytes,
+    *,
+    overwrite: bool = False,
+) -> tuple[Path, bool]:
     if not content:
         raise ValueError("Uploaded file is empty")
 
     slug = validate_game_slug(game_slug)
     safe_name = sanitize_pdf_filename(filename)
     destination = game_dir(slug) / safe_name
+    existed = destination.is_file()
+    if existed and not overwrite:
+        raise ValueError(f"Manual already exists: {safe_name}")
+
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(content)
-    return destination.resolve()
+    return destination.resolve(), existed
 
 
 def list_games() -> list[str]:

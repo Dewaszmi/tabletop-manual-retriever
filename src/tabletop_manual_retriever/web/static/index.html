@@ -137,6 +137,13 @@
 
     .status.error { color: #b91c1c; }
     .status.success { color: var(--ok); }
+    .status.warning { color: #b45309; }
+
+    .game-count {
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
 
     .library-empty {
       color: var(--muted);
@@ -196,7 +203,7 @@
   <main>
     <header>
       <h1>Manual Library</h1>
-      <p>Upload a rulebook PDF for a board game. It is saved under <code>data/uploads/&lt;game&gt;/</code> and parsed automatically into a JSON file beside the PDF.</p>
+      <p>Upload one or more rulebook PDFs for a board game. Files are saved under <code>data/uploads/&lt;game&gt;/</code> and parsed automatically into JSON beside each PDF.</p>
     </header>
 
     <div class="grid">
@@ -206,12 +213,16 @@
           <label for="game-name">Board game</label>
           <input id="game-name" name="game_name" type="text" placeholder="e.g. Catan" required>
 
-          <label for="pdf-file">Rulebook PDF</label>
-          <input id="pdf-file" name="file" type="file" accept="application/pdf,.pdf" required>
+          <label for="pdf-file">Rulebook PDFs</label>
+          <input id="pdf-file" name="files" type="file" accept="application/pdf,.pdf" multiple required>
 
           <button type="submit" id="upload-button">Upload and parse</button>
         </form>
-        <p class="hint">Game names are turned into folder slugs like <code>ticket-to-ride</code>.</p>
+        <p class="hint">
+          Use the same game name to add base rules, expansions, or reference sheets.
+          Each PDF is stored separately in the game's folder.
+        </p>
+        <p class="hint">Game names become folder slugs like <code>ticket-to-ride</code>.</p>
         <div id="status" class="status" aria-live="polite"></div>
       </section>
 
@@ -229,6 +240,7 @@
     const uploadButton = document.getElementById("upload-button");
     const statusEl = document.getElementById("status");
     const libraryEl = document.getElementById("library");
+    let currentLibrary = [];
 
     function slugify(name) {
       return name
@@ -249,7 +261,41 @@
       statusEl.className = `status${type ? ` ${type}` : ""}`;
     }
 
+    function sanitizeFilename(filename) {
+      return filename.split(/[/\\]/).pop();
+    }
+
+    function findGame(gameSlug) {
+      return currentLibrary.find((game) => game.game_slug === gameSlug);
+    }
+
+    function findConflicts(gameSlug, files) {
+      const game = findGame(gameSlug);
+      if (!game) {
+        return [];
+      }
+      const existing = new Set(game.manuals.map((manual) => manual.filename));
+      return Array.from(files)
+        .map((file) => sanitizeFilename(file.name))
+        .filter((name) => existing.has(name));
+    }
+
+    function formatUploadSummary(payload) {
+      const uploads = payload.uploads || [payload];
+      const names = uploads.map((item) => item.filename).join(", ");
+      const pages = uploads.reduce((sum, item) => sum + (item.page_count || 0), 0);
+      const replaced = uploads.filter((item) => item.overwritten).map((item) => item.filename);
+
+      let message = `Saved ${uploads.length} manual${uploads.length === 1 ? "" : "s"}: ${names} (${pages} total pages).`;
+      if (replaced.length) {
+        message += ` Replaced: ${replaced.join(", ")}.`;
+      }
+      return { message, type: replaced.length ? "warning" : "success" };
+    }
+
     function renderLibrary(library) {
+      currentLibrary = library;
+
       if (!library.length) {
         libraryEl.innerHTML = '<p class="library-empty">No manuals yet. Upload your first rulebook.</p>';
         return;
@@ -270,9 +316,11 @@
           </div>
         `).join("");
 
+        const countLabel = `${game.manuals.length} manual${game.manuals.length === 1 ? "" : "s"}`;
+
         return `
           <article class="game">
-            <h3>${game.game_slug}</h3>
+            <h3>${game.game_slug} <span class="game-count">(${countLabel})</span></h3>
             ${manuals}
           </article>
         `;
@@ -292,7 +340,7 @@
       event.preventDefault();
       const gameName = document.getElementById("game-name").value;
       const fileInput = document.getElementById("pdf-file");
-      const file = fileInput.files[0];
+      const selectedFiles = Array.from(fileInput.files || []);
       const gameSlug = slugify(gameName);
 
       if (!gameSlug) {
@@ -300,19 +348,43 @@
         return;
       }
 
-      if (!file) {
-        setStatus("Choose a PDF file to upload.", "error");
+      if (!selectedFiles.length) {
+        setStatus("Choose at least one PDF file to upload.", "error");
         return;
       }
 
+      const conflicts = findConflicts(gameSlug, selectedFiles);
+      let overwrite = false;
+      if (conflicts.length) {
+        const confirmed = window.confirm(
+          `These files already exist for ${gameSlug} and will be replaced:\n\n${conflicts.join("\n")}\n\nContinue?`
+        );
+        if (!confirmed) {
+          setStatus("Upload cancelled.", "warning");
+          return;
+        }
+        overwrite = true;
+      }
+
       uploadButton.disabled = true;
-      setStatus("Uploading and parsing…");
+      setStatus(
+        selectedFiles.length === 1
+          ? "Uploading and parsing…"
+          : `Uploading and parsing ${selectedFiles.length} manuals…`
+      );
 
       const body = new FormData();
-      body.append("file", file);
+      for (const file of selectedFiles) {
+        body.append("files", file);
+      }
 
       try {
-        const response = await fetch(`/games/${encodeURIComponent(gameSlug)}/manuals`, {
+        const url = new URL(`/games/${encodeURIComponent(gameSlug)}/manuals`, window.location.origin);
+        if (overwrite) {
+          url.searchParams.set("overwrite", "true");
+        }
+
+        const response = await fetch(url, {
           method: "POST",
           body,
         });
@@ -322,10 +394,8 @@
           throw new Error(payload.detail || "Upload failed");
         }
 
-        setStatus(
-          `Saved ${payload.filename} (${payload.page_count} pages, ${payload.block_count} blocks).`,
-          "success"
-        );
+        const summary = formatUploadSummary(payload);
+        setStatus(summary.message, summary.type);
         uploadForm.reset();
         await loadLibrary();
       } catch (error) {

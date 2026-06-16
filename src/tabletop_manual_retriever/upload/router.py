@@ -8,9 +8,11 @@ from tabletop_manual_retriever.storage import (
     list_games,
     list_library,
     list_manuals,
+    manual_exists,
     save_manual,
     validate_game_slug,
 )
+from tabletop_manual_retriever.storage.manuals import sanitize_pdf_filename
 
 router = APIRouter(prefix="/games", tags=["uploads"])
 
@@ -20,6 +22,47 @@ def _relative_upload_path(path: Path) -> str:
         return str(path.relative_to(PROJECT_ROOT))
     except ValueError:
         return str(path)
+
+
+def _collect_upload_files(
+    file: UploadFile | None,
+    files: list[UploadFile] | None,
+) -> list[UploadFile]:
+    uploads: list[UploadFile] = []
+    if file is not None:
+        uploads.append(file)
+    if files:
+        uploads.extend(files)
+    return uploads
+
+
+async def _process_manual_upload(
+    game_slug: str,
+    upload: UploadFile,
+    content: bytes,
+    *,
+    overwrite: bool,
+) -> dict:
+    if not upload.filename or Path(upload.filename).suffix.lower() != ".pdf":
+        raise ValueError(f"Upload a .pdf file: {upload.filename or 'unnamed file'}")
+
+    saved_path, existed = save_manual(
+        game_slug,
+        upload.filename,
+        content,
+        overwrite=overwrite,
+    )
+    manual, parsed_path = save_parsed_manual(saved_path)
+
+    return {
+        "filename": saved_path.name,
+        "path": _relative_upload_path(saved_path),
+        "parsed_path": _relative_upload_path(parsed_path),
+        "page_count": manual.page_count,
+        "block_count": len(manual.blocks),
+        "size_bytes": saved_path.stat().st_size,
+        "overwritten": existed,
+    }
 
 
 @router.get("")
@@ -46,26 +89,60 @@ async def list_manuals_endpoint(game_slug: str) -> dict:
 @router.post("/{game_slug}/manuals")
 async def upload_manual_endpoint(
     game_slug: str,
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(None),
+    files: list[UploadFile] | None = File(None),
+    overwrite: bool = False,
 ) -> dict:
-    if not file.filename or Path(file.filename).suffix.lower() != ".pdf":
-        raise HTTPException(status_code=400, detail="Upload a .pdf file")
-
-    content = await file.read()
+    uploads = _collect_upload_files(file, files)
+    if not uploads:
+        raise HTTPException(status_code=400, detail="Upload at least one .pdf file")
 
     try:
         slug = validate_game_slug(game_slug)
-        saved_path = save_manual(slug, file.filename, content)
-        manual, parsed_path = save_parsed_manual(saved_path)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not overwrite:
+            conflicts: list[str] = []
+            for upload in uploads:
+                if not upload.filename:
+                    continue
+                try:
+                    safe_name = sanitize_pdf_filename(upload.filename)
+                except ValueError:
+                    continue
+                if manual_exists(slug, safe_name):
+                    conflicts.append(safe_name)
+            if conflicts:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Manual already exists: {', '.join(conflicts)}",
+                )
 
-    return {
-        "game_slug": slug,
-        "filename": saved_path.name,
-        "path": _relative_upload_path(saved_path),
-        "parsed_path": _relative_upload_path(parsed_path),
-        "page_count": manual.page_count,
-        "block_count": len(manual.blocks),
-        "size_bytes": saved_path.stat().st_size,
-    }
+        results: list[dict] = []
+        for upload in uploads:
+            content = await upload.read()
+            try:
+                results.append(
+                    await _process_manual_upload(
+                        slug,
+                        upload,
+                        content,
+                        overwrite=overwrite,
+                    )
+                )
+            except ValueError as exc:
+                if len(uploads) == 1:
+                    raise
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{upload.filename}: {exc}",
+                ) from exc
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 409 if message.startswith("Manual already exists:") else 400
+        raise HTTPException(status_code=status_code, detail=message) from exc
+    except HTTPException:
+        raise
+
+    if len(results) == 1:
+        return {"game_slug": slug, **results[0]}
+
+    return {"game_slug": slug, "uploads": results}

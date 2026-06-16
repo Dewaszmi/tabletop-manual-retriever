@@ -45,10 +45,17 @@ Parse a PDF:
 curl -F "file=@data/uploads/catan/rules.pdf" http://127.0.0.1:8000/parse-pdf
 ```
 
-Upload a manual for a board game (stored under `data/uploads/<game-slug>/` and parsed to JSON beside the PDF):
+Upload one or more manuals for a board game (stored under `data/uploads/<game-slug>/` and parsed to JSON beside each PDF):
 
 ```bash
 curl -F "file=@/path/to/rules.pdf" http://127.0.0.1:8000/games/catan/manuals
+curl -F "files=@/path/to/base-rules.pdf" -F "files=@/path/to/seafarers.pdf" http://127.0.0.1:8000/games/catan/manuals
+```
+
+Replace an existing manual with the same filename:
+
+```bash
+curl -F "file=@/path/to/rules.pdf" "http://127.0.0.1:8000/games/catan/manuals?overwrite=true"
 ```
 
 Open the web UI:

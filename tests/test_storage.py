@@ -31,12 +31,58 @@ def test_save_manual_creates_game_directory_and_file(
         "tabletop_manual_retriever.storage.manuals.UPLOADS_DIR", tmp_path
     )
 
-    saved_path = save_manual("catan", "rules.pdf", b"%PDF-1.4")
+    saved_path, overwritten = save_manual("catan", "rules.pdf", b"%PDF-1.4")
 
     assert saved_path == (tmp_path / "catan" / "rules.pdf").resolve()
     assert saved_path.read_bytes() == b"%PDF-1.4"
+    assert overwritten is False
     assert list_games() == ["catan"]
     assert list_manuals("catan") == ["rules.pdf"]
+
+
+def test_save_manual_stores_multiple_pdfs_for_one_game(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "tabletop_manual_retriever.storage.manuals.UPLOADS_DIR", tmp_path
+    )
+
+    save_manual("catan", "base-rules.pdf", b"%PDF-1.4")
+    save_manual("catan", "seafarers.pdf", b"%PDF-1.5")
+
+    assert list_manuals("catan") == ["base-rules.pdf", "seafarers.pdf"]
+
+
+def test_save_manual_rejects_overwrite_without_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "tabletop_manual_retriever.storage.manuals.UPLOADS_DIR", tmp_path
+    )
+
+    save_manual("catan", "rules.pdf", b"original")
+
+    with pytest.raises(ValueError, match="already exists"):
+        save_manual("catan", "rules.pdf", b"replacement")
+
+
+def test_save_manual_allows_overwrite_when_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "tabletop_manual_retriever.storage.manuals.UPLOADS_DIR", tmp_path
+    )
+
+    save_manual("catan", "rules.pdf", b"original")
+    saved_path, overwritten = save_manual(
+        "catan",
+        "rules.pdf",
+        b"replacement",
+        overwrite=True,
+    )
+
+    assert overwritten is True
+    assert saved_path.read_bytes() == b"replacement"
 
 
 def test_save_manual_rejects_empty_file(
