@@ -45,10 +45,16 @@ Parse a PDF:
 curl -F "file=@data/uploads/catan/rules.pdf" http://127.0.0.1:8000/parse-pdf
 ```
 
-Upload a manual for a board game (stored under `data/uploads/<game-slug>/`):
+Upload a manual for a board game (stored under `data/uploads/<game-slug>/` and parsed to JSON beside the PDF):
 
 ```bash
 curl -F "file=@/path/to/rules.pdf" http://127.0.0.1:8000/games/catan/manuals
+```
+
+Open the web UI:
+
+```text
+http://127.0.0.1:8000/
 ```
 
 List uploaded games and manuals:
@@ -56,6 +62,7 @@ List uploaded games and manuals:
 ```bash
 curl http://127.0.0.1:8000/games
 curl http://127.0.0.1:8000/games/catan/manuals
+curl http://127.0.0.1:8000/games/library
 ```
 
 Docker:
@@ -75,6 +82,7 @@ docker compose down
 Services:
 
 ```text
+Web UI: http://127.0.0.1:8000/
 API:    http://127.0.0.1:8000
 Qdrant: http://127.0.0.1:6333
 ```
@@ -88,11 +96,15 @@ src/tabletop_manual_retriever/
   ingest/
     models.py    # ParsedManual, TextBlock
     parser.py    # PDF text extraction
+    serialize.py # save parsed JSON beside PDFs
     router.py    # parse-pdf endpoint
   storage/
     manuals.py   # save/list uploaded PDFs on disk
   upload/
     router.py    # upload/list game manuals
+  web/
+    router.py    # web UI
+    static/      # HTML/CSS/JS for library page
   cli.py         # parse-manual command
 tests/
 data/uploads/    # uploaded manuals, one folder per game
