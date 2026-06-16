@@ -1,0 +1,8 @@
+from tabletop_manual_retriever.storage.manuals import (
+    list_games,
+    list_manuals,
+    save_manual,
+    validate_game_slug,
+)
+
+__all__ = ["list_games", "list_manuals", "save_manual", "validate_game_slug"]

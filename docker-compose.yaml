@@ -3,6 +3,10 @@ services:
     build: .
     ports:
       - "8000:8000"
+    environment:
+      UPLOADS_DIR: /app/data/uploads
+    volumes:
+      - ./data/uploads:/app/data/uploads:z
 
   qdrant:
     image: qdrant/qdrant:latest
