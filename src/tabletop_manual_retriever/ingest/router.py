@@ -1,11 +1,25 @@
+import asyncio
+from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from tabletop_manual_retriever.ingest import parse_pdf
+from tabletop_manual_retriever.ingest.schemas import IngestRequest, IngestResponse
+from tabletop_manual_retriever.ingest.service import (
+    IngestDependencyError,
+    IngestService,
+    IngestStoreError,
+)
 
-router = APIRouter()
+router = APIRouter(tags=["ingest"])
+
+
+@lru_cache
+def get_ingest_service() -> IngestService:
+    return IngestService()
 
 
 @router.post("/parse-pdf")
@@ -35,3 +49,26 @@ async def parse_pdf_endpoint(file: UploadFile = File(...)) -> dict:
             for block in manual.blocks
         ],
     }
+
+
+@router.post("/ingest", response_model=IngestResponse)
+async def ingest_endpoint(
+    request: IngestRequest,
+    service: Annotated[IngestService, Depends(get_ingest_service)],
+) -> IngestResponse:
+    try:
+        result = await asyncio.to_thread(
+            service.ingest_manuals,
+            game_slug=request.game_slug,
+            filename=request.filename,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except IngestDependencyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except IngestStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return IngestResponse.from_result(result)

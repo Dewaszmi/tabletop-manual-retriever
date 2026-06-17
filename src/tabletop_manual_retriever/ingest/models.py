@@ -34,3 +34,12 @@ class ParsedManual:
             for page_number in range(1, self.page_count + 1)
             if self.text_for_page(page_number).strip()
         ]
+
+
+@dataclass(frozen=True)
+class ManualChunk:
+    """A text fragment ready to embed and store in vector search."""
+
+    text: str
+    page_number: int
+    chunk_index: int

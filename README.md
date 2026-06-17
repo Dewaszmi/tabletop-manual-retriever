@@ -72,6 +72,20 @@ curl http://127.0.0.1:8000/games/catan/manuals
 curl http://127.0.0.1:8000/games/library
 ```
 
+Ingest uploaded manuals into Qdrant:
+
+```bash
+curl -X POST http://127.0.0.1:8000/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"game_slug":"catan"}'
+
+curl -X POST http://127.0.0.1:8000/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"game_slug":"catan","filename":"rules.pdf"}'
+```
+
+Defaults: `QDRANT_URL=http://localhost:6333`, `QDRANT_COLLECTION=manual_chunks`.
+
 Docker:
 
 ```bash
@@ -101,9 +115,12 @@ src/tabletop_manual_retriever/
   main.py        # FastAPI app
   config.py      # uploads directory config
   ingest/
+    chunking.py  # split parsed manual text into chunks
     models.py    # ParsedManual, TextBlock
     parser.py    # PDF text extraction
+    schemas.py   # API request/response schemas
     serialize.py # save parsed JSON beside PDFs
+    service.py   # embed chunks and upsert them into Qdrant
     router.py    # parse-pdf endpoint
   storage/
     manuals.py   # save/list uploaded PDFs on disk
