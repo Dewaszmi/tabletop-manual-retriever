@@ -5,8 +5,11 @@ services:
       - "8000:8000"
     environment:
       UPLOADS_DIR: /app/data/uploads
+      QDRANT_URL: http://qdrant:6333
     volumes:
       - ./data/uploads:/app/data/uploads:z
+    depends_on:
+      - qdrant
 
   qdrant:
     image: qdrant/qdrant:latest
