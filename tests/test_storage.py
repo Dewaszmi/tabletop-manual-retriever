@@ -53,6 +53,20 @@ def test_save_manual_stores_multiple_pdfs_for_one_game(
     assert list_manuals("catan") == ["base-rules.pdf", "seafarers.pdf"]
 
 
+def test_save_manual_accepts_spaces_in_filename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "tabletop_manual_retriever.storage.manuals.UPLOADS_DIR", tmp_path
+    )
+
+    saved_path, overwritten = save_manual("catan", "base rules v2.pdf", b"%PDF-1.4")
+
+    assert saved_path == (tmp_path / "catan" / "base rules v2.pdf").resolve()
+    assert overwritten is False
+    assert list_manuals("catan") == ["base rules v2.pdf"]
+
+
 def test_save_manual_rejects_overwrite_without_flag(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

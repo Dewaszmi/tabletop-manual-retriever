@@ -51,6 +51,25 @@ def test_upload_manual_endpoint_stores_pdf_and_parsed_json(
     assert (uploads_dir / "catan" / "rules.json").is_file()
 
 
+def test_upload_manual_endpoint_accepts_spaces_in_filename(
+    uploads_dir: Path, tmp_path: Path
+) -> None:
+    pdf_bytes = tmp_path / "source.pdf"
+    _make_sample_pdf(pdf_bytes)
+
+    client = TestClient(app)
+    response = client.post(
+        "/games/catan/manuals",
+        files={"file": ("base rules.pdf", pdf_bytes.read_bytes(), "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["filename"] == "base rules.pdf"
+    assert (uploads_dir / "catan" / "base rules.pdf").is_file()
+    assert (uploads_dir / "catan" / "base rules.json").is_file()
+
+
 def test_upload_multiple_manuals_for_one_game(
     uploads_dir: Path, tmp_path: Path
 ) -> None:

@@ -6,7 +6,7 @@ from tabletop_manual_retriever.config import PROJECT_ROOT, UPLOADS_DIR
 from tabletop_manual_retriever.ingest.serialize import parsed_manual_path
 
 _SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+\.pdf$")
+_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9 ._-]+\.pdf$")
 _INVALID_SLUGS = frozenset({".", ".."})
 
 
@@ -27,7 +27,9 @@ def sanitize_pdf_filename(filename: str) -> str:
 
     name = Path(filename).name
     if not _FILENAME_PATTERN.fullmatch(name):
-        raise ValueError("Filename must be a .pdf file with only letters, numbers, dots, underscores, or hyphens")
+        raise ValueError(
+            "Filename must be a .pdf file with only letters, numbers, spaces, dots, underscores, or hyphens"
+        )
 
     return name
 
