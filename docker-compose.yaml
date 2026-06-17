@@ -19,9 +19,11 @@ services:
     networks:
       - app
 
+  # currently running llms locally via ollama
   ollama:
     image: ollama/ollama:latest
     volumes:
+      # mounts ${HOME}/.ollama so already download models are reused (no re-download)
       - ${HOME}/.ollama:/root/.ollama
     networks:
       - app

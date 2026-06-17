@@ -1,111 +1,159 @@
 # tabletop-manual-retriever
 
-LLM-powered system for fast retrieval of information from tabletop game manuals.
+LLM-powered retrieval from tabletop game manuals.
 
-Users provide their own rulebook PDFs. The pipeline starts with structured text extraction, then will add chunking, embeddings, and RAG query.
+Upload rulebook PDFs, index them into a vector store, then ask natural-language questions grounded in the manual text.
 
-## Setup
+## Quick start (Docker Compose)
+
+Recommended way to run everything: API, Qdrant, and Ollama.
+
+**1. Pull the LLM model** (once, on the host — Compose reuses `~/.ollama`):
+
+```bash
+ollama pull llama3.2
+```
+
+**2. Start the stack:**
+
+```bash
+docker compose up --build -d
+```
+
+**3. Open the web UI:**
+
+```text
+http://127.0.0.1:8000/
+```
+
+**4. Upload a manual** for a game (e.g. `monopoly`), click **Ingest** on the PDF, then use **Ask the rules** to query it.
+
+Or use the API:
+
+```bash
+# Upload
+curl -F "file=@/path/to/rules.pdf" http://127.0.0.1:8000/games/monopoly/manuals
+
+# Index into Qdrant
+curl -X POST http://127.0.0.1:8000/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"game_slug":"monopoly"}'
+
+# Ask a question (retrieval + LLM)
+curl -s -X POST http://127.0.0.1:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"game_slug":"monopoly","question":"How do I win?"}' | jq '{answer_mode, answer}'
+```
+
+The first LLM query may take 30–60 seconds while the model loads.
+
+**Stop:**
+
+```bash
+docker compose down
+```
+
+### Services
+
+| Service | URL |
+|---|---|
+| Web UI / API | http://127.0.0.1:8000/ |
+| Qdrant | http://127.0.0.1:6333 |
+
+Compose runs Ollama internally at `http://ollama:11434` (not exposed on the host). It mounts `${HOME}/.ollama` so models you already pulled with the host `ollama` CLI are reused.
+
+### Environment variables
+
+Defaults are set in `docker-compose.yaml`. Common overrides:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LLM_MODEL` | `llama3.2:latest` | Must match a model in `ollama list` |
+| `LLM_BASE_URL` | `http://ollama:11434/v1` | OpenAI-compatible chat API |
+| `QDRANT_COLLECTION` | `manual_chunks` | Vector collection name |
+| `RAG_TOP_K` | `5` | Number of chunks retrieved per query |
+
+If `LLM_BASE_URL` / `LLM_MODEL` are unset, `/query` falls back to returning retrieved excerpts (`answer_mode: "excerpt"`).
+
+## Local development (without Docker)
+
+**Setup:**
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-```
-
-## Parse a manual
-
-Drop a PDF into `data/uploads/<game-slug>/`, then run:
-
-```bash
-parse-manual data/uploads/catan/rules.pdf
-```
-
-Show a single page:
-
-```bash
-parse-manual data/uploads/catan/rules.pdf --page 3
-```
-
-Structured JSON output:
-
-```bash
-parse-manual data/uploads/catan/rules.pdf --json
-```
-
-## API server
-
-```bash
 pip install -r requirements.txt
+```
+
+**Run Qdrant** (required for ingest/query):
+
+```bash
+docker run --rm -p 6333:6333 qdrant/qdrant
+```
+
+**Run Ollama** (required for LLM answers):
+
+```bash
+ollama pull llama3.2
+ollama serve
+```
+
+**Start the API:**
+
+```bash
+export LLM_BASE_URL=http://127.0.0.1:11434/v1
+export LLM_MODEL=llama3.2:latest
 PYTHONPATH=src uvicorn tabletop_manual_retriever.main:app --reload
 ```
 
-Parse a PDF:
+Then open http://127.0.0.1:8000/
+
+## CLI: parse a manual
+
+Drop a PDF into `data/uploads/<game-slug>/`, then:
 
 ```bash
-curl -F "file=@data/uploads/catan/rules.pdf" http://127.0.0.1:8000/parse-pdf
+parse-manual data/uploads/catan/rules.pdf
+parse-manual data/uploads/catan/rules.pdf --page 3
+parse-manual data/uploads/catan/rules.pdf --json
 ```
 
-Upload one or more manuals for a board game (stored under `data/uploads/<game-slug>/` and parsed to JSON beside each PDF):
+## API overview
+
+Upload manuals:
 
 ```bash
 curl -F "file=@/path/to/rules.pdf" http://127.0.0.1:8000/games/catan/manuals
 curl -F "files=@/path/to/base-rules.pdf" -F "files=@/path/to/seafarers.pdf" http://127.0.0.1:8000/games/catan/manuals
 ```
 
-Replace an existing manual with the same filename:
+Replace an existing file:
 
 ```bash
 curl -F "file=@/path/to/rules.pdf" "http://127.0.0.1:8000/games/catan/manuals?overwrite=true"
 ```
 
-Open the web UI:
-
-```text
-http://127.0.0.1:8000/
-```
-
-List uploaded games and manuals:
+List library:
 
 ```bash
-curl http://127.0.0.1:8000/games
-curl http://127.0.0.1:8000/games/catan/manuals
 curl http://127.0.0.1:8000/games/library
 ```
 
-Ingest uploaded manuals into Qdrant:
+Ingest into Qdrant:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/ingest \
   -H "Content-Type: application/json" \
   -d '{"game_slug":"catan"}'
+```
 
-curl -X POST http://127.0.0.1:8000/ingest \
+Query with RAG:
+
+```bash
+curl -X POST http://127.0.0.1:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"game_slug":"catan","filename":"rules.pdf"}'
-```
-
-Defaults: `QDRANT_URL=http://localhost:6333`, `QDRANT_COLLECTION=manual_chunks`.
-
-Docker:
-
-```bash
-docker build -t tabletop-manual-retriever .
-docker run --rm -p 8000:8000 tabletop-manual-retriever
-```
-
-Docker Compose:
-
-```bash
-docker compose up --build -d
-docker compose down
-```
-
-Services:
-
-```text
-Web UI: http://127.0.0.1:8000/
-API:    http://127.0.0.1:8000
-Qdrant: http://127.0.0.1:6333
+  -d '{"game_slug":"catan","question":"How many cards do I draw?"}'
 ```
 
 ## Project layout
@@ -113,22 +161,12 @@ Qdrant: http://127.0.0.1:6333
 ```
 src/tabletop_manual_retriever/
   main.py        # FastAPI app
-  config.py      # uploads directory config
-  ingest/
-    chunking.py  # split parsed manual text into chunks
-    models.py    # ParsedManual, TextBlock
-    parser.py    # PDF text extraction
-    schemas.py   # API request/response schemas
-    serialize.py # save parsed JSON beside PDFs
-    service.py   # embed chunks and upsert them into Qdrant
-    router.py    # parse-pdf endpoint
-  storage/
-    manuals.py   # save/list uploaded PDFs on disk
-  upload/
-    router.py    # upload/list game manuals
-  web/
-    router.py    # web UI
-    static/      # HTML/CSS/JS for library page
+  config.py      # env config
+  ingest/        # parse, chunk, embed, upsert to Qdrant
+  rag/           # retrieve chunks + LLM answer
+  storage/       # save/list uploaded PDFs
+  upload/        # upload/list game manuals
+  web/           # web UI
   cli.py         # parse-manual command
 tests/
 data/uploads/    # uploaded manuals, one folder per game
