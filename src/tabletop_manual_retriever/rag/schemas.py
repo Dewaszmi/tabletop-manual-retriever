@@ -25,6 +25,7 @@ class RagResponse(BaseModel):
     sources: list[RagSourceResponse]
     context: str
     answer: str
+    answer_mode: str
 
     @classmethod
     def from_result(cls, result: RagResult) -> "RagResponse":
@@ -44,4 +45,5 @@ class RagResponse(BaseModel):
             ],
             context=result.context,
             answer=result.answer,
+            answer_mode=result.answer_mode,
         )

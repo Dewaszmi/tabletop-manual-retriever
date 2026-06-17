@@ -3,6 +3,7 @@ from collections.abc import Sequence
 import pytest
 
 from tabletop_manual_retriever.ingest.service import RetrievedChunk
+from tabletop_manual_retriever.rag.llm import build_llm_context, build_llm_messages
 from tabletop_manual_retriever.rag.service import RagService
 
 
@@ -47,10 +48,22 @@ class FakeVectorStore:
         ]
 
 
-def test_rag_service_returns_sources_and_answer() -> None:
+class FakeAnswerGenerator:
+    def generate(
+        self,
+        *,
+        question: str,
+        game_slug: str,
+        sources: Sequence[RetrievedChunk],
+    ) -> str:
+        return f"Answer for {game_slug}: {question} ({len(sources)} sources)"
+
+
+def test_rag_service_returns_sources_and_excerpt_answer() -> None:
     service = RagService(
         embedder=FakeEmbedder(),
         vector_store=FakeVectorStore(),
+        answer_generator=None,
         top_k=2,
     )
 
@@ -65,6 +78,22 @@ def test_rag_service_returns_sources_and_answer() -> None:
     assert result.sources[0].page_number == 3
     assert "Reach 10 victory points" in result.context
     assert "From rules.pdf (page 3)" in result.answer
+    assert result.answer_mode == "excerpt"
+
+
+def test_rag_service_uses_llm_answer_generator() -> None:
+    service = RagService(
+        embedder=FakeEmbedder(),
+        vector_store=FakeVectorStore(),
+        answer_generator=FakeAnswerGenerator(),
+    )
+
+    result = service.query(
+        game_slug="catan",
+        question="How do I win?",
+        top_k=2,
+    )
+    assert result.answer_mode == "llm"
 
 
 def test_rag_service_rejects_empty_question() -> None:
@@ -96,3 +125,27 @@ def test_rag_service_filters_by_filename() -> None:
 
     assert result.sources == ()
     assert "No relevant manual passages" in result.answer
+    assert result.answer_mode == "none"
+
+
+def test_build_llm_messages_include_numbered_sources() -> None:
+    sources = [
+        RetrievedChunk(
+            text="Reach 10 victory points to win.",
+            page_number=3,
+            chunk_index=0,
+            filename="rules.pdf",
+            score=0.91,
+        )
+    ]
+
+    messages = build_llm_messages(
+        question="How do I win?",
+        game_slug="catan",
+        sources=sources,
+    )
+
+    assert messages[0]["role"] == "system"
+    assert "[1] rules.pdf, page 3" in messages[1]["content"]
+    assert "How do I win?" in messages[1]["content"]
+    assert build_llm_context(sources).startswith("[1] rules.pdf")

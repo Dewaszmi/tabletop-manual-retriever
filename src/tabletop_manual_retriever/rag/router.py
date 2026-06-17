@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from tabletop_manual_retriever.ingest.service import IngestDependencyError, IngestStoreError
 from tabletop_manual_retriever.rag.schemas import RagRequest, RagResponse
 from tabletop_manual_retriever.rag.service import RagService
+from tabletop_manual_retriever.rag.llm import LlmError
 
 router = APIRouter(tags=["rag"])
 
@@ -34,6 +35,8 @@ async def query_endpoint(
     except IngestDependencyError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except IngestStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except LlmError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return RagResponse.from_result(result)
