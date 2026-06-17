@@ -222,6 +222,51 @@
       font-weight: 700;
       vertical-align: middle;
     }
+
+    textarea {
+      width: 100%;
+      min-height: 6rem;
+      margin-bottom: 1rem;
+      padding: 0.75rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      resize: vertical;
+    }
+
+    .query-result {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .query-result h3 {
+      margin: 0 0 0.75rem;
+      font-size: 1rem;
+    }
+
+    .query-answer {
+      white-space: pre-wrap;
+      line-height: 1.5;
+      margin: 0 0 1rem;
+    }
+
+    .source {
+      padding: 0.75rem 0;
+      border-top: 1px dashed var(--border);
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .source:first-of-type { border-top: 0; }
+
+    .source-meta {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 0.35rem;
+    }
   </style>
 </head>
 <body>
@@ -257,6 +302,22 @@
           <p class="library-empty">Loading…</p>
         </div>
       </section>
+
+      <section class="card">
+        <h2>Ask the rules</h2>
+        <form id="query-form">
+          <label for="query-game">Board game</label>
+          <input id="query-game" name="game_slug" type="text" placeholder="e.g. catan" required>
+
+          <label for="query-question">Question</label>
+          <textarea id="query-question" name="question" placeholder="How do I win?" required></textarea>
+
+          <button type="submit" id="query-button">Search manuals</button>
+        </form>
+        <p class="hint">Ingest manuals first so their chunks are available in Qdrant.</p>
+        <div id="query-status" class="status" aria-live="polite"></div>
+        <div id="query-result" hidden></div>
+      </section>
     </div>
   </main>
 
@@ -265,6 +326,10 @@
     const uploadButton = document.getElementById("upload-button");
     const statusEl = document.getElementById("status");
     const libraryEl = document.getElementById("library");
+    const queryForm = document.getElementById("query-form");
+    const queryButton = document.getElementById("query-button");
+    const queryStatusEl = document.getElementById("query-status");
+    const queryResultEl = document.getElementById("query-result");
     let currentLibrary = [];
 
     function slugify(name) {
@@ -284,6 +349,31 @@
     function setStatus(message, type = "") {
       statusEl.textContent = message;
       statusEl.className = `status${type ? ` ${type}` : ""}`;
+    }
+
+    function setQueryStatus(message, type = "") {
+      queryStatusEl.textContent = message;
+      queryStatusEl.className = `status${type ? ` ${type}` : ""}`;
+    }
+
+    function renderQueryResult(payload) {
+      const sources = (payload.sources || []).map((source) => `
+        <article class="source">
+          <div class="source-meta">
+            ${source.filename} · page ${source.page_number} · score ${source.score.toFixed(3)}
+          </div>
+          <div>${source.text}</div>
+        </article>
+      `).join("");
+
+      queryResultEl.innerHTML = `
+        <div class="query-result">
+          <h3>Answer</h3>
+          <p class="query-answer">${payload.answer || "No answer returned."}</p>
+          ${sources ? `<h3>Sources</h3>${sources}` : ""}
+        </div>
+      `;
+      queryResultEl.hidden = false;
     }
 
     function sanitizeFilename(filename) {
@@ -408,6 +498,54 @@
         status.className = "ingest-status error";
       } finally {
         button.disabled = completed;
+      }
+    });
+
+    queryForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const gameSlug = slugify(document.getElementById("query-game").value);
+      const question = document.getElementById("query-question").value.trim();
+
+      if (!gameSlug) {
+        setQueryStatus("Enter a valid board game slug.", "error");
+        return;
+      }
+
+      if (!question) {
+        setQueryStatus("Enter a question.", "error");
+        return;
+      }
+
+      queryButton.disabled = true;
+      queryResultEl.hidden = true;
+      setQueryStatus("Searching manuals…");
+
+      try {
+        const response = await fetch("/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            game_slug: gameSlug,
+            question,
+          }),
+        });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.detail || "Query failed");
+        }
+
+        renderQueryResult(payload);
+        setQueryStatus(
+          payload.sources.length
+            ? `Found ${payload.sources.length} relevant passage${payload.sources.length === 1 ? "" : "s"}.`
+            : "No relevant passages found.",
+          payload.sources.length ? "success" : "warning"
+        );
+      } catch (error) {
+        setQueryStatus(error.message, "error");
+      } finally {
+        queryButton.disabled = false;
       }
     });
 

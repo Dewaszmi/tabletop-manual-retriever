@@ -24,3 +24,4 @@ def _int_env(name: str, default: int) -> int:
 
 CHUNK_MAX_CHARS = _int_env("CHUNK_MAX_CHARS", 1200)
 CHUNK_OVERLAP_CHARS = _int_env("CHUNK_OVERLAP_CHARS", 150)
+RAG_TOP_K = _int_env("RAG_TOP_K", 5)
