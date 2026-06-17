@@ -132,7 +132,10 @@ class QdrantVectorStore:
 
         try:
             if self._client is None:
-                self._client = QdrantClient(url=self.url)
+                self._client = QdrantClient(
+                    url=self.url,
+                    check_compatibility=False,
+                )
 
             vector_size = len(vectors[0])
             if not self._client.collection_exists(collection_name=collection_name):

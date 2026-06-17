@@ -9,7 +9,10 @@ services:
     volumes:
       - ./data/uploads:/app/data/uploads:z
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_healthy
+    networks:
+      - app
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -18,6 +21,18 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - app
+
+networks:
+  app:
+    driver: bridge
 
 volumes:
   qdrant_data:
