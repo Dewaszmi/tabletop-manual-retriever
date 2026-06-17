@@ -1,0 +1,134 @@
+import json
+import re
+from pathlib import Path
+
+from tabletop_manual_retriever.config import PROJECT_ROOT, UPLOADS_DIR
+from tabletop_manual_retriever.ingest.serialize import parsed_manual_path
+
+_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9 ._-]+\.pdf$")
+_INVALID_SLUGS = frozenset({".", ".."})
+
+
+def validate_game_slug(slug: str) -> str:
+    normalized = slug.strip().lower()
+    if not normalized or normalized in _INVALID_SLUGS:
+        raise ValueError("Game slug is required")
+    if "/" in normalized or "\\" in normalized or not _SLUG_PATTERN.fullmatch(normalized):
+        raise ValueError(
+            "Game slug may only contain lowercase letters, numbers, and hyphens"
+        )
+    return normalized
+
+
+def sanitize_pdf_filename(filename: str) -> str:
+    if not filename:
+        raise ValueError("Filename is required")
+
+    name = Path(filename).name
+    if not _FILENAME_PATTERN.fullmatch(name):
+        raise ValueError(
+            "Filename must be a .pdf file with only letters, numbers, spaces, dots, underscores, or hyphens"
+        )
+
+    return name
+
+
+def game_dir(game_slug: str) -> Path:
+    slug = validate_game_slug(game_slug)
+    return UPLOADS_DIR / slug
+
+
+def manual_path(game_slug: str, filename: str) -> Path:
+    slug = validate_game_slug(game_slug)
+    safe_name = sanitize_pdf_filename(filename)
+    return game_dir(slug) / safe_name
+
+
+def manual_exists(game_slug: str, filename: str) -> bool:
+    return manual_path(game_slug, filename).is_file()
+
+
+def save_manual(
+    game_slug: str,
+    filename: str,
+    content: bytes,
+    *,
+    overwrite: bool = False,
+) -> tuple[Path, bool]:
+    if not content:
+        raise ValueError("Uploaded file is empty")
+
+    slug = validate_game_slug(game_slug)
+    safe_name = sanitize_pdf_filename(filename)
+    destination = game_dir(slug) / safe_name
+    existed = destination.is_file()
+    if existed and not overwrite:
+        raise ValueError(f"Manual already exists: {safe_name}")
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(content)
+    return destination.resolve(), existed
+
+
+def list_games() -> list[str]:
+    if not UPLOADS_DIR.exists():
+        return []
+    return sorted(
+        path.name for path in UPLOADS_DIR.iterdir() if path.is_dir()
+    )
+
+
+def list_manuals(game_slug: str) -> list[str]:
+    slug = validate_game_slug(game_slug)
+    manuals_dir = UPLOADS_DIR / slug
+    if not manuals_dir.exists():
+        return []
+    return sorted(
+        path.name
+        for path in manuals_dir.iterdir()
+        if path.is_file() and path.suffix.lower() == ".pdf"
+    )
+
+
+def _relative_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def manual_metadata(pdf_path: Path) -> dict:
+    parsed_path = parsed_manual_path(pdf_path)
+    metadata = {
+        "filename": pdf_path.name,
+        "path": _relative_path(pdf_path.resolve()),
+        "size_bytes": pdf_path.stat().st_size,
+        "parsed": parsed_path.is_file(),
+        "parsed_path": None,
+        "page_count": None,
+        "block_count": None,
+    }
+
+    if parsed_path.is_file():
+        metadata["parsed_path"] = _relative_path(parsed_path.resolve())
+        try:
+            payload = json.loads(parsed_path.read_text(encoding="utf-8"))
+            metadata["page_count"] = payload.get("page_count")
+            metadata["block_count"] = len(payload.get("blocks", []))
+        except (OSError, ValueError, TypeError):
+            pass
+
+    return metadata
+
+
+def list_library() -> list[dict]:
+    library: list[dict] = []
+    for game_slug in list_games():
+        game_path = UPLOADS_DIR / game_slug
+        manuals = [
+            manual_metadata(game_path / filename)
+            for filename in list_manuals(game_slug)
+        ]
+        library.append({"game_slug": game_slug, "manuals": manuals})
+    return library

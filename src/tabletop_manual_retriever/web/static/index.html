@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual Library</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --ink: #1f1a14;
+      --muted: #6d6458;
+      --accent: #9a3412;
+      --accent-hover: #7c2d12;
+      --border: #ddd4c6;
+      --ok: #166534;
+      --shadow: 0 10px 30px rgba(31, 26, 20, 0.08);
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #171411;
+        --panel: #211c18;
+        --ink: #f6f0e8;
+        --muted: #b7aa9a;
+        --accent: #ea580c;
+        --accent-hover: #fb923c;
+        --border: #3a322b;
+        --ok: #4ade80;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(154, 52, 18, 0.12), transparent 30%),
+        var(--bg);
+      color: var(--ink);
+    }
+
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+
+    header h1 {
+      margin: 0 0 0.35rem;
+      font-size: clamp(1.8rem, 4vw, 2.4rem);
+      letter-spacing: -0.03em;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 42rem;
+      line-height: 1.5;
+    }
+
+    .grid {
+      display: grid;
+      gap: 1.25rem;
+      margin-top: 2rem;
+    }
+
+    @media (min-width: 760px) {
+      .grid { grid-template-columns: 1fr 1.2fr; }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 1.25rem;
+      box-shadow: var(--shadow);
+    }
+
+    .card h2 {
+      margin: 0 0 1rem;
+      font-size: 1.05rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+    }
+
+    input[type="text"],
+    input[type="file"] {
+      width: 100%;
+      margin-bottom: 1rem;
+      padding: 0.75rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+    }
+
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.6; cursor: wait; }
+
+    .hint {
+      margin-top: 0.75rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+
+    .status {
+      min-height: 1.25rem;
+      margin-top: 0.85rem;
+      font-size: 0.95rem;
+    }
+
+    .status.error { color: #b91c1c; }
+    .status.success { color: var(--ok); }
+    .status.warning { color: #b45309; }
+
+    .game-count {
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .library-empty {
+      color: var(--muted);
+      padding: 0.5rem 0;
+    }
+
+    .game {
+      border-top: 1px solid var(--border);
+      padding-top: 1rem;
+      margin-top: 1rem;
+    }
+
+    .game:first-child {
+      border-top: 0;
+      padding-top: 0;
+      margin-top: 0;
+    }
+
+    .game h3 {
+      margin: 0 0 0.65rem;
+      font-size: 1.15rem;
+    }
+
+    .manual {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.7rem 0;
+      border-top: 1px dashed var(--border);
+      font-size: 0.95rem;
+    }
+
+    .manual:first-of-type { border-top: 0; }
+
+    .manual-name { font-weight: 600; }
+
+    .manual-meta {
+      color: var(--muted);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-left: 0.4rem;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      background: rgba(22, 101, 52, 0.12);
+      color: var(--ok);
+      font-size: 0.78rem;
+      font-weight: 700;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Manual Library</h1>
+      <p>Upload one or more rulebook PDFs for a board game. Files are saved under <code>data/uploads/&lt;game&gt;/</code> and parsed automatically into JSON beside each PDF.</p>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Add to library</h2>
+        <form id="upload-form">
+          <label for="game-name">Board game</label>
+          <input id="game-name" name="game_name" type="text" placeholder="e.g. Catan" required>
+
+          <label for="pdf-file">Rulebook PDFs</label>
+          <input id="pdf-file" name="files" type="file" accept="application/pdf,.pdf" multiple required>
+
+          <button type="submit" id="upload-button">Upload and parse</button>
+        </form>
+        <p class="hint">
+          Use the same game name to add base rules, expansions, or reference sheets.
+          Each PDF is stored separately in the game's folder.
+        </p>
+        <p class="hint">Game names become folder slugs like <code>ticket-to-ride</code>.</p>
+        <div id="status" class="status" aria-live="polite"></div>
+      </section>
+
+      <section class="card">
+        <h2>Library</h2>
+        <div id="library">
+          <p class="library-empty">Loading…</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const uploadForm = document.getElementById("upload-form");
+    const uploadButton = document.getElementById("upload-button");
+    const statusEl = document.getElementById("status");
+    const libraryEl = document.getElementById("library");
+    let currentLibrary = [];
+
+    function slugify(name) {
+      return name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function setStatus(message, type = "") {
+      statusEl.textContent = message;
+      statusEl.className = `status${type ? ` ${type}` : ""}`;
+    }
+
+    function sanitizeFilename(filename) {
+      return filename.split(/[/\\]/).pop();
+    }
+
+    function findGame(gameSlug) {
+      return currentLibrary.find((game) => game.game_slug === gameSlug);
+    }
+
+    function findConflicts(gameSlug, files) {
+      const game = findGame(gameSlug);
+      if (!game) {
+        return [];
+      }
+      const existing = new Set(game.manuals.map((manual) => manual.filename));
+      return Array.from(files)
+        .map((file) => sanitizeFilename(file.name))
+        .filter((name) => existing.has(name));
+    }
+
+    function formatUploadSummary(payload) {
+      const uploads = payload.uploads || [payload];
+      const names = uploads.map((item) => item.filename).join(", ");
+      const pages = uploads.reduce((sum, item) => sum + (item.page_count || 0), 0);
+      const replaced = uploads.filter((item) => item.overwritten).map((item) => item.filename);
+
+      let message = `Saved ${uploads.length} manual${uploads.length === 1 ? "" : "s"}: ${names} (${pages} total pages).`;
+      if (replaced.length) {
+        message += ` Replaced: ${replaced.join(", ")}.`;
+      }
+      return { message, type: replaced.length ? "warning" : "success" };
+    }
+
+    function renderLibrary(library) {
+      currentLibrary = library;
+
+      if (!library.length) {
+        libraryEl.innerHTML = '<p class="library-empty">No manuals yet. Upload your first rulebook.</p>';
+        return;
+      }
+
+      libraryEl.innerHTML = library.map((game) => {
+        const manuals = game.manuals.map((manual) => `
+          <div class="manual">
+            <div>
+              <div class="manual-name">${manual.filename}</div>
+              <div class="manual-meta">${manual.parsed_path || ""}</div>
+            </div>
+            <div class="manual-meta">
+              ${manual.page_count != null ? `${manual.page_count} pages` : ""}
+              ${manual.parsed ? '<span class="badge">parsed</span>' : ""}
+              <div>${formatBytes(manual.size_bytes)}</div>
+            </div>
+          </div>
+        `).join("");
+
+        const countLabel = `${game.manuals.length} manual${game.manuals.length === 1 ? "" : "s"}`;
+
+        return `
+          <article class="game">
+            <h3>${game.game_slug} <span class="game-count">(${countLabel})</span></h3>
+            ${manuals}
+          </article>
+        `;
+      }).join("");
+    }
+
+    async function loadLibrary() {
+      const response = await fetch("/games/library");
+      if (!response.ok) {
+        throw new Error("Could not load library");
+      }
+      const payload = await response.json();
+      renderLibrary(payload.library);
+    }
+
+    uploadForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const gameName = document.getElementById("game-name").value;
+      const fileInput = document.getElementById("pdf-file");
+      const selectedFiles = Array.from(fileInput.files || []);
+      const gameSlug = slugify(gameName);
+
+      if (!gameSlug) {
+        setStatus("Enter a valid board game name.", "error");
+        return;
+      }
+
+      if (!selectedFiles.length) {
+        setStatus("Choose at least one PDF file to upload.", "error");
+        return;
+      }
+
+      const conflicts = findConflicts(gameSlug, selectedFiles);
+      let overwrite = false;
+      if (conflicts.length) {
+        const confirmed = window.confirm(
+          `These files already exist for ${gameSlug} and will be replaced:\n\n${conflicts.join("\n")}\n\nContinue?`
+        );
+        if (!confirmed) {
+          setStatus("Upload cancelled.", "warning");
+          return;
+        }
+        overwrite = true;
+      }
+
+      uploadButton.disabled = true;
+      setStatus(
+        selectedFiles.length === 1
+          ? "Uploading and parsing…"
+          : `Uploading and parsing ${selectedFiles.length} manuals…`
+      );
+
+      const body = new FormData();
+      for (const file of selectedFiles) {
+        body.append("files", file);
+      }
+
+      try {
+        const url = new URL(`/games/${encodeURIComponent(gameSlug)}/manuals`, window.location.origin);
+        if (overwrite) {
+          url.searchParams.set("overwrite", "true");
+        }
+
+        const response = await fetch(url, {
+          method: "POST",
+          body,
+        });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.detail || "Upload failed");
+        }
+
+        const summary = formatUploadSummary(payload);
+        setStatus(summary.message, summary.type);
+        uploadForm.reset();
+        await loadLibrary();
+      } catch (error) {
+        setStatus(error.message, "error");
+      } finally {
+        uploadButton.disabled = false;
+      }
+    });
+
+    loadLibrary().catch(() => {
+      libraryEl.innerHTML = '<p class="library-empty">Could not load the library.</p>';
+    });
+  </script>
+</body>
+</html>

@@ -14,22 +14,22 @@ pip install -e ".[dev]"
 
 ## Parse a manual
 
-Drop a PDF into `data/uploads/`, then run:
+Drop a PDF into `data/uploads/<game-slug>/`, then run:
 
 ```bash
-parse-manual data/uploads/your-manual.pdf
+parse-manual data/uploads/catan/rules.pdf
 ```
 
 Show a single page:
 
 ```bash
-parse-manual data/uploads/your-manual.pdf --page 3
+parse-manual data/uploads/catan/rules.pdf --page 3
 ```
 
 Structured JSON output:
 
 ```bash
-parse-manual data/uploads/your-manual.pdf --json
+parse-manual data/uploads/catan/rules.pdf --json
 ```
 
 ## API server
@@ -42,7 +42,34 @@ PYTHONPATH=src uvicorn tabletop_manual_retriever.main:app --reload
 Parse a PDF:
 
 ```bash
-curl -F "file=@data/uploads/your-manual.pdf" http://127.0.0.1:8000/parse-pdf
+curl -F "file=@data/uploads/catan/rules.pdf" http://127.0.0.1:8000/parse-pdf
+```
+
+Upload one or more manuals for a board game (stored under `data/uploads/<game-slug>/` and parsed to JSON beside each PDF):
+
+```bash
+curl -F "file=@/path/to/rules.pdf" http://127.0.0.1:8000/games/catan/manuals
+curl -F "files=@/path/to/base-rules.pdf" -F "files=@/path/to/seafarers.pdf" http://127.0.0.1:8000/games/catan/manuals
+```
+
+Replace an existing manual with the same filename:
+
+```bash
+curl -F "file=@/path/to/rules.pdf" "http://127.0.0.1:8000/games/catan/manuals?overwrite=true"
+```
+
+Open the web UI:
+
+```text
+http://127.0.0.1:8000/
+```
+
+List uploaded games and manuals:
+
+```bash
+curl http://127.0.0.1:8000/games
+curl http://127.0.0.1:8000/games/catan/manuals
+curl http://127.0.0.1:8000/games/library
 ```
 
 Docker:
@@ -62,6 +89,7 @@ docker compose down
 Services:
 
 ```text
+Web UI: http://127.0.0.1:8000/
 API:    http://127.0.0.1:8000
 Qdrant: http://127.0.0.1:6333
 ```
@@ -71,13 +99,22 @@ Qdrant: http://127.0.0.1:6333
 ```
 src/tabletop_manual_retriever/
   main.py        # FastAPI app
+  config.py      # uploads directory config
   ingest/
     models.py    # ParsedManual, TextBlock
     parser.py    # PDF text extraction
+    serialize.py # save parsed JSON beside PDFs
     router.py    # parse-pdf endpoint
+  storage/
+    manuals.py   # save/list uploaded PDFs on disk
+  upload/
+    router.py    # upload/list game manuals
+  web/
+    router.py    # web UI
+    static/      # HTML/CSS/JS for library page
   cli.py         # parse-manual command
 tests/
-data/uploads/    # place test PDFs here
+data/uploads/    # uploaded manuals, one folder per game
 ```
 
 ## Tests
