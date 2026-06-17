@@ -186,6 +186,31 @@
       white-space: nowrap;
     }
 
+    .manual-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 0.35rem;
+    }
+
+    .manual-actions button {
+      width: auto;
+      min-width: 5.5rem;
+      padding: 0.45rem 0.7rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+    }
+
+    .ingest-status {
+      color: var(--muted);
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+
+    .ingest-status.success { color: var(--ok); }
+    .ingest-status.error { color: #b91c1c; }
+
     .badge {
       display: inline-block;
       margin-left: 0.4rem;
@@ -312,6 +337,15 @@
               ${manual.page_count != null ? `${manual.page_count} pages` : ""}
               ${manual.parsed ? '<span class="badge">parsed</span>' : ""}
               <div>${formatBytes(manual.size_bytes)}</div>
+              <div class="manual-actions">
+                <span class="ingest-status" aria-live="polite"></span>
+                <button
+                  type="button"
+                  class="ingest-button"
+                  data-game-slug="${game.game_slug}"
+                  data-filename="${manual.filename}"
+                >Ingest</button>
+              </div>
             </div>
           </div>
         `).join("");
@@ -335,6 +369,47 @@
       const payload = await response.json();
       renderLibrary(payload.library);
     }
+
+    libraryEl.addEventListener("click", async (event) => {
+      const button = event.target instanceof Element
+        ? event.target.closest(".ingest-button")
+        : null;
+      if (!button) {
+        return;
+      }
+
+      const status = button.parentElement.querySelector(".ingest-status");
+      let completed = false;
+      button.disabled = true;
+      status.textContent = "Indexing…";
+      status.className = "ingest-status";
+
+      try {
+        const response = await fetch("/ingest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            game_slug: button.dataset.gameSlug,
+            filename: button.dataset.filename,
+          }),
+        });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.detail || "Ingest failed");
+        }
+
+        status.textContent = `Indexed ${payload.total_chunks} chunks`;
+        status.className = "ingest-status success";
+        button.textContent = "Indexed";
+        completed = true;
+      } catch (error) {
+        status.textContent = error.message;
+        status.className = "ingest-status error";
+      } finally {
+        button.disabled = completed;
+      }
+    });
 
     uploadForm.addEventListener("submit", async (event) => {
       event.preventDefault();
