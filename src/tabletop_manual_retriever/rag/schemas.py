@@ -1,6 +1,17 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
+from tabletop_manual_retriever.rag.llm import ConversationMessage
 from tabletop_manual_retriever.rag.service import RagResult, build_source_excerpt
+
+
+class RagHistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=4000)
+
+    def to_conversation_message(self) -> ConversationMessage:
+        return ConversationMessage(role=self.role, content=self.content)
 
 
 class RagRequest(BaseModel):
@@ -8,6 +19,7 @@ class RagRequest(BaseModel):
     question: str = Field(..., min_length=1)
     filename: str | None = None
     top_k: int | None = Field(default=None, ge=1, le=20)
+    history: list[RagHistoryMessage] = Field(default_factory=list, max_length=20)
 
 
 class RagSourceResponse(BaseModel):
@@ -27,6 +39,7 @@ class RagResponse(BaseModel):
     context: str
     answer: str
     answer_mode: str
+    history: list[RagHistoryMessage]
 
     @classmethod
     def from_result(cls, result: RagResult) -> "RagResponse":
@@ -48,4 +61,8 @@ class RagResponse(BaseModel):
             context=result.context,
             answer=result.answer,
             answer_mode=result.answer_mode,
+            history=[
+                RagHistoryMessage(role=message.role, content=message.content)
+                for message in result.history
+            ],
         )

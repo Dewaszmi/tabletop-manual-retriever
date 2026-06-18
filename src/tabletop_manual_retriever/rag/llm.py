@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol
+from dataclasses import dataclass
+from typing import Literal, Protocol
 
 from tabletop_manual_retriever.ingest.service import RetrievedChunk
 
 
 class LlmError(RuntimeError):
     """Raised when the LLM request fails."""
+
+
+@dataclass(frozen=True)
+class ConversationMessage:
+    role: Literal["user", "assistant"]
+    content: str
 
 
 class AnswerGenerator(Protocol):
@@ -17,6 +24,7 @@ class AnswerGenerator(Protocol):
         question: str,
         game_slug: str,
         sources: Sequence[RetrievedChunk],
+        history: Sequence[ConversationMessage] = (),
     ) -> str:
         """Return a natural-language answer grounded in the sources."""
 
@@ -25,7 +33,8 @@ _SYSTEM_PROMPT = (
     "You answer questions about tabletop game rules using only the provided manual "
     "excerpts. If the excerpts do not contain enough information, say you could not "
     "find it in the manual. Cite source numbers like [1] when referring to specific "
-    "passages. Be concise and practical."
+    "passages. Use the conversation history to resolve follow-up questions, but do "
+    "not invent rules that are not supported by the excerpts. Be concise and practical."
 )
 
 
@@ -41,21 +50,34 @@ def build_llm_context(sources: Sequence[RetrievedChunk]) -> str:
     )
 
 
+def build_conversation_context(history: Sequence[ConversationMessage]) -> str:
+    if not history:
+        return "No previous conversation."
+    return "\n".join(
+        f"{message.role}: {message.content.strip()}"
+        for message in history
+        if message.content.strip()
+    )
+
+
 def build_llm_messages(
     *,
     question: str,
     game_slug: str,
     sources: Sequence[RetrievedChunk],
+    history: Sequence[ConversationMessage] = (),
 ) -> list[dict[str, str]]:
     context = build_llm_context(sources)
+    conversation = build_conversation_context(history)
     return [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {
             "role": "user",
             "content": (
                 f"Game: {game_slug}\n\n"
+                f"Conversation history:\n{conversation}\n\n"
                 f"Manual excerpts:\n{context}\n\n"
-                f"Question: {question}"
+                f"Current question: {question}"
             ),
         },
     ]
@@ -83,6 +105,7 @@ class OpenAICompatibleAnswerGenerator:
         question: str,
         game_slug: str,
         sources: Sequence[RetrievedChunk],
+        history: Sequence[ConversationMessage] = (),
     ) -> str:
         if not sources:
             raise ValueError("sources are required to generate an answer")
@@ -102,6 +125,7 @@ class OpenAICompatibleAnswerGenerator:
                 question=question,
                 game_slug=game_slug,
                 sources=sources,
+                history=history,
             ),
             "temperature": 0.2,
         }

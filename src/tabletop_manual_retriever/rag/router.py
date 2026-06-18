@@ -29,6 +29,10 @@ async def query_endpoint(
             question=request.question,
             filename=request.filename,
             top_k=request.top_k,
+            history=[
+                message.to_conversation_message()
+                for message in request.history
+            ],
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

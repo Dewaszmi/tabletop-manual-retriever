@@ -3,7 +3,11 @@ from collections.abc import Sequence
 import pytest
 
 from tabletop_manual_retriever.ingest.service import RetrievedChunk
-from tabletop_manual_retriever.rag.llm import build_llm_context, build_llm_messages
+from tabletop_manual_retriever.rag.llm import (
+    ConversationMessage,
+    build_llm_context,
+    build_llm_messages,
+)
 from tabletop_manual_retriever.rag.service import RagService, build_source_excerpt
 
 
@@ -55,6 +59,7 @@ class FakeAnswerGenerator:
         question: str,
         game_slug: str,
         sources: Sequence[RetrievedChunk],
+        history: Sequence[ConversationMessage] = (),
     ) -> str:
         return f"Answer for {game_slug}: {question} ({len(sources)} sources)"
 
@@ -105,6 +110,71 @@ def test_rag_service_uses_llm_answer_generator() -> None:
     assert result.answer_mode == "llm"
 
 
+def test_rag_service_uses_history_for_retrieval_and_answer() -> None:
+    class CapturingEmbedder:
+        def __init__(self) -> None:
+            self.texts: list[str] = []
+
+        def embed(self, texts: Sequence[str]) -> list[list[float]]:
+            self.texts = list(texts)
+            return [[1.0] for _ in texts]
+
+    class CapturingVectorStore(FakeVectorStore):
+        def search_chunks(self, **kwargs) -> list[RetrievedChunk]:
+            assert kwargs["vector"] == [1.0]
+            return [
+                RetrievedChunk(
+                    text="A settlement is worth 1 victory point.",
+                    page_number=4,
+                    chunk_index=1,
+                    filename="rules.pdf",
+                    score=0.82,
+                )
+            ]
+
+    class CapturingAnswerGenerator:
+        def __init__(self) -> None:
+            self.history: Sequence[ConversationMessage] = ()
+
+        def generate(
+            self,
+            *,
+            question: str,
+            game_slug: str,
+            sources: Sequence[RetrievedChunk],
+            history: Sequence[ConversationMessage] = (),
+        ) -> str:
+            self.history = history
+            return "Settlements are worth 1 point."
+
+    embedder = CapturingEmbedder()
+    generator = CapturingAnswerGenerator()
+    history = (
+        ConversationMessage(role="user", content="How do I score?"),
+        ConversationMessage(role="assistant", content="Use victory points."),
+    )
+    service = RagService(
+        embedder=embedder,
+        vector_store=CapturingVectorStore(),
+        answer_generator=generator,
+    )
+
+    result = service.query(
+        game_slug="catan",
+        question="What about settlements?",
+        history=history,
+    )
+
+    assert "How do I score?" in embedder.texts[0]
+    assert "Current question: What about settlements?" in embedder.texts[0]
+    assert generator.history == history
+    assert "Conversation history" in result.context
+    assert result.history[-2:] == (
+        ConversationMessage(role="user", content="What about settlements?"),
+        ConversationMessage(role="assistant", content="Settlements are worth 1 point."),
+    )
+
+
 def test_rag_service_rejects_empty_question() -> None:
     service = RagService(
         embedder=FakeEmbedder(),
@@ -152,9 +222,14 @@ def test_build_llm_messages_include_numbered_sources() -> None:
         question="How do I win?",
         game_slug="catan",
         sources=sources,
+        history=(
+            ConversationMessage(role="user", content="What is the goal?"),
+            ConversationMessage(role="assistant", content="Score points."),
+        ),
     )
 
     assert messages[0]["role"] == "system"
+    assert "What is the goal?" in messages[1]["content"]
     assert "[1] rules.pdf, page 3" in messages[1]["content"]
     assert "How do I win?" in messages[1]["content"]
     assert build_llm_context(sources).startswith("[1] rules.pdf")
