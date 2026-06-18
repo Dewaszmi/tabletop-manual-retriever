@@ -6,10 +6,27 @@ services:
     environment:
       UPLOADS_DIR: /app/data/uploads
       QDRANT_URL: http://qdrant:6333
+      LLM_BASE_URL: http://ollama:11434/v1
+      LLM_MODEL: llama3.2:latest
+      LLM_API_KEY: ollama
     volumes:
       - ./data/uploads:/app/data/uploads:z
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - app
+
+  # currently running llms locally via ollama
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      # mounts ${HOME}/.ollama so already download models are reused (no re-download)
+      - ${HOME}/.ollama:/root/.ollama
+    networks:
+      - app
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -18,6 +35,18 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - app
+
+networks:
+  app:
+    driver: bridge
 
 volumes:
   qdrant_data:

@@ -38,6 +38,15 @@ class TextEmbedder(Protocol):
         """Return one embedding vector per text."""
 
 
+@dataclass(frozen=True)
+class RetrievedChunk:
+    text: str
+    page_number: int
+    chunk_index: int
+    filename: str
+    score: float
+
+
 class VectorStore(Protocol):
     def upsert_chunks(
         self,
@@ -51,6 +60,17 @@ class VectorStore(Protocol):
         vectors: Sequence[Sequence[float]],
     ) -> int:
         """Store chunk vectors and return the number of upserted points."""
+
+    def search_chunks(
+        self,
+        *,
+        collection_name: str,
+        vector: Sequence[float],
+        game_slug: str,
+        filename: str | None = None,
+        limit: int,
+    ) -> list[RetrievedChunk]:
+        """Return the closest stored chunks for a query vector."""
 
 
 @dataclass(frozen=True)
@@ -132,7 +152,10 @@ class QdrantVectorStore:
 
         try:
             if self._client is None:
-                self._client = QdrantClient(url=self.url)
+                self._client = QdrantClient(
+                    url=self.url,
+                    check_compatibility=False,
+                )
 
             vector_size = len(vectors[0])
             if not self._client.collection_exists(collection_name=collection_name):
@@ -165,6 +188,85 @@ class QdrantVectorStore:
             return len(points)
         except Exception as exc:
             raise IngestStoreError(f"Could not write chunks to Qdrant: {exc}") from exc
+
+    def search_chunks(
+        self,
+        *,
+        collection_name: str,
+        vector: Sequence[float],
+        game_slug: str,
+        filename: str | None = None,
+        limit: int,
+    ) -> list[RetrievedChunk]:
+        if limit < 1:
+            return []
+
+        try:
+            from qdrant_client import QdrantClient, models
+        except ImportError as exc:
+            raise IngestDependencyError(
+                "Install qdrant-client to search embeddings in Qdrant."
+            ) from exc
+
+        try:
+            if self._client is None:
+                self._client = QdrantClient(
+                    url=self.url,
+                    check_compatibility=False,
+                )
+
+            if not self._client.collection_exists(collection_name=collection_name):
+                return []
+
+            filter_conditions = [
+                models.FieldCondition(
+                    key="game_slug",
+                    match=models.MatchValue(value=game_slug),
+                )
+            ]
+            if filename is not None:
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="filename",
+                        match=models.MatchValue(value=filename),
+                    )
+                )
+
+            query_response = self._client.query_points(
+                collection_name=collection_name,
+                query=[float(value) for value in vector],
+                query_filter=models.Filter(must=filter_conditions),
+                limit=limit,
+                with_payload=True,
+            )
+            hits = query_response.points
+        except Exception as exc:
+            raise IngestStoreError(f"Could not search chunks in Qdrant: {exc}") from exc
+
+        results: list[RetrievedChunk] = []
+        for hit in hits:
+            payload = hit.payload or {}
+            text = payload.get("text")
+            page_number = payload.get("page_number")
+            chunk_index = payload.get("chunk_index")
+            hit_filename = payload.get("filename")
+            if (
+                not isinstance(text, str)
+                or not isinstance(page_number, int)
+                or not isinstance(chunk_index, int)
+                or not isinstance(hit_filename, str)
+            ):
+                continue
+            results.append(
+                RetrievedChunk(
+                    text=text,
+                    page_number=page_number,
+                    chunk_index=chunk_index,
+                    filename=hit_filename,
+                    score=float(hit.score or 0.0),
+                )
+            )
+        return results
 
 
 @dataclass
