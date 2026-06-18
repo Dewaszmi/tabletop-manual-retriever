@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from tabletop_manual_retriever.rag.service import RagResult
+from tabletop_manual_retriever.rag.service import RagResult, build_source_excerpt
 
 
 class RagRequest(BaseModel):
@@ -12,6 +12,7 @@ class RagRequest(BaseModel):
 
 class RagSourceResponse(BaseModel):
     text: str
+    excerpt: str
     page_number: int
     chunk_index: int
     filename: str
@@ -36,6 +37,7 @@ class RagResponse(BaseModel):
             sources=[
                 RagSourceResponse(
                     text=source.text,
+                    excerpt=build_source_excerpt(source.text),
                     page_number=source.page_number,
                     chunk_index=source.chunk_index,
                     filename=source.filename,

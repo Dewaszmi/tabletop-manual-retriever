@@ -4,7 +4,7 @@ import pytest
 
 from tabletop_manual_retriever.ingest.service import RetrievedChunk
 from tabletop_manual_retriever.rag.llm import build_llm_context, build_llm_messages
-from tabletop_manual_retriever.rag.service import RagService
+from tabletop_manual_retriever.rag.service import RagService, build_source_excerpt
 
 
 class FakeEmbedder:
@@ -79,6 +79,15 @@ def test_rag_service_returns_sources_and_excerpt_answer() -> None:
     assert "Reach 10 victory points" in result.context
     assert "From rules.pdf (page 3)" in result.answer
     assert result.answer_mode == "excerpt"
+
+
+def test_build_source_excerpt_shortens_long_text_without_cutting_words() -> None:
+    excerpt = build_source_excerpt(
+        "one two three four five",
+        max_chars=15,
+    )
+
+    assert excerpt == "one two three..."
 
 
 def test_rag_service_uses_llm_answer_generator() -> None:

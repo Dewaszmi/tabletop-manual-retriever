@@ -81,6 +81,7 @@ def test_query_endpoint_returns_rag_response(rag_client: TestClient) -> None:
     assert payload["game_slug"] == "catan"
     assert payload["question"] == "What happens on my turn?"
     assert payload["sources"][0]["text"] == "Roll the dice on your turn."
+    assert payload["sources"][0]["excerpt"] == "Roll the dice on your turn."
     assert payload["sources"][0]["page_number"] == 2
     assert "Roll the dice on your turn." in payload["answer"]
     assert payload["answer_mode"] == "excerpt"

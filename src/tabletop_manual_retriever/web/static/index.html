@@ -257,6 +257,23 @@
       margin: 0 0 1rem;
     }
 
+    .query-sources {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .query-sources > summary,
+    .source-full > summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .query-sources > summary {
+      margin-bottom: 0.75rem;
+    }
+
     .source {
       padding: 0.75rem 0;
       border-top: 1px dashed var(--border);
@@ -270,6 +287,24 @@
       color: var(--muted);
       font-size: 0.85rem;
       margin-bottom: 0.35rem;
+    }
+
+    .source-excerpt {
+      margin: 0;
+    }
+
+    .source-full {
+      margin-top: 0.5rem;
+    }
+
+    .source-full-text {
+      max-height: 12rem;
+      overflow: auto;
+      margin: 0.5rem 0 0;
+      padding: 0.75rem;
+      border-left: 3px solid var(--border);
+      color: var(--muted);
+      white-space: pre-wrap;
     }
   </style>
 </head>
@@ -364,23 +399,68 @@
       queryStatusEl.className = `status${type ? ` ${type}` : ""}`;
     }
 
-    function renderQueryResult(payload) {
-      const sources = (payload.sources || []).map((source) => `
-        <article class="source">
-          <div class="source-meta">
-            ${source.filename} · page ${source.page_number} · score ${source.score.toFixed(3)}
-          </div>
-          <div>${source.text}</div>
-        </article>
-      `).join("");
+    function appendTextElement(parent, tagName, className, text) {
+      const element = document.createElement(tagName);
+      if (className) {
+        element.className = className;
+      }
+      element.textContent = text;
+      parent.appendChild(element);
+      return element;
+    }
 
-      queryResultEl.innerHTML = `
-        <div class="query-result">
-          <h3>Answer</h3>
-          <p class="query-answer">${payload.answer || "No answer returned."}</p>
-          ${sources ? `<h3>Sources</h3>${sources}` : ""}
-        </div>
-      `;
+    function formatScore(score) {
+      return Number.isFinite(score) ? score.toFixed(3) : "n/a";
+    }
+
+    function renderQueryResult(payload) {
+      const sources = payload.sources || [];
+      const result = document.createElement("div");
+      result.className = "query-result";
+
+      appendTextElement(result, "h3", "", "Answer");
+      appendTextElement(
+        result,
+        "p",
+        "query-answer",
+        payload.answer || "No answer returned."
+      );
+
+      if (sources.length) {
+        const sourceDetails = document.createElement("details");
+        sourceDetails.className = "query-sources";
+        appendTextElement(
+          sourceDetails,
+          "summary",
+          "",
+          `Sources (${sources.length})`
+        );
+
+        for (const source of sources) {
+          const article = document.createElement("article");
+          article.className = "source";
+
+          appendTextElement(
+            article,
+            "div",
+            "source-meta",
+            `${source.filename} · page ${source.page_number} · score ${formatScore(source.score)}`
+          );
+          appendTextElement(article, "p", "source-excerpt", source.excerpt || "");
+
+          const fullSource = document.createElement("details");
+          fullSource.className = "source-full";
+          appendTextElement(fullSource, "summary", "", "Show full passage");
+          appendTextElement(fullSource, "p", "source-full-text", source.text || "");
+          article.appendChild(fullSource);
+
+          sourceDetails.appendChild(article);
+        }
+
+        result.appendChild(sourceDetails);
+      }
+
+      queryResultEl.replaceChildren(result);
       queryResultEl.hidden = false;
     }
 

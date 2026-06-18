@@ -27,6 +27,8 @@ from tabletop_manual_retriever.rag.llm import (
 )
 from tabletop_manual_retriever.storage.manuals import sanitize_pdf_filename, validate_game_slug
 
+SOURCE_EXCERPT_MAX_CHARS = 280
+
 
 class RagDependencyError(IngestDependencyError):
     """Raised when optional RAG dependencies are not installed."""
@@ -128,6 +130,18 @@ def _build_context(sources: Sequence[RetrievedChunk]) -> str:
     if not sources:
         return ""
     return "\n\n---\n\n".join(source.text for source in sources)
+
+
+def build_source_excerpt(
+    text: str,
+    max_chars: int = SOURCE_EXCERPT_MAX_CHARS,
+) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= max_chars:
+        return normalized
+
+    excerpt = normalized[:max_chars].rsplit(" ", 1)[0]
+    return f"{excerpt or normalized[:max_chars]}..."
 
 
 def _build_answer(
