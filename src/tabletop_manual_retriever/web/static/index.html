@@ -96,7 +96,8 @@
     }
 
     input[type="text"],
-    input[type="file"] {
+    input[type="file"],
+    select {
       width: 100%;
       margin-bottom: 1rem;
       padding: 0.75rem 0.85rem;
@@ -106,6 +107,9 @@
       color: inherit;
       font: inherit;
     }
+
+    select { cursor: pointer; }
+    select:disabled { opacity: 0.65; cursor: not-allowed; }
 
     button {
       width: 100%;
@@ -307,7 +311,9 @@
         <h2>Ask the rules</h2>
         <form id="query-form">
           <label for="query-game">Board game</label>
-          <input id="query-game" name="game_slug" type="text" placeholder="e.g. catan" required>
+          <select id="query-game" name="game_slug" required>
+            <option value="">Loading library...</option>
+          </select>
 
           <label for="query-question">Question</label>
           <textarea id="query-question" name="question" placeholder="How do I win?" required></textarea>
@@ -327,10 +333,12 @@
     const statusEl = document.getElementById("status");
     const libraryEl = document.getElementById("library");
     const queryForm = document.getElementById("query-form");
+    const queryGameSelect = document.getElementById("query-game");
     const queryButton = document.getElementById("query-button");
     const queryStatusEl = document.getElementById("query-status");
     const queryResultEl = document.getElementById("query-result");
     let currentLibrary = [];
+    let pendingQueryGameSelection = "";
 
     function slugify(name) {
       return name
@@ -408,8 +416,30 @@
       return { message, type: replaced.length ? "warning" : "success" };
     }
 
+    function renderQueryGameOptions(library) {
+      const previousSelection = pendingQueryGameSelection || queryGameSelect.value;
+      pendingQueryGameSelection = "";
+
+      if (!library.length) {
+        queryGameSelect.innerHTML = '<option value="">Upload a manual first</option>';
+        queryGameSelect.disabled = true;
+        return;
+      }
+
+      queryGameSelect.disabled = false;
+      queryGameSelect.innerHTML = library.map((game) => {
+        const countLabel = `${game.manuals.length} manual${game.manuals.length === 1 ? "" : "s"}`;
+        return `<option value="${game.game_slug}">${game.game_slug} (${countLabel})</option>`;
+      }).join("");
+
+      if (library.some((game) => game.game_slug === previousSelection)) {
+        queryGameSelect.value = previousSelection;
+      }
+    }
+
     function renderLibrary(library) {
       currentLibrary = library;
+      renderQueryGameOptions(library);
 
       if (!library.length) {
         libraryEl.innerHTML = '<p class="library-empty">No manuals yet. Upload your first rulebook.</p>';
@@ -492,6 +522,7 @@
         status.textContent = `Indexed ${payload.total_chunks} chunks`;
         status.className = "ingest-status success";
         button.textContent = "Indexed";
+        queryGameSelect.value = button.dataset.gameSlug;
         completed = true;
       } catch (error) {
         status.textContent = error.message;
@@ -503,11 +534,11 @@
 
     queryForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const gameSlug = slugify(document.getElementById("query-game").value);
+      const gameSlug = queryGameSelect.value;
       const question = document.getElementById("query-question").value.trim();
 
       if (!gameSlug) {
-        setQueryStatus("Enter a valid board game slug.", "error");
+        setQueryStatus("Choose a board game from the library.", "error");
         return;
       }
 
@@ -610,6 +641,7 @@
         const summary = formatUploadSummary(payload);
         setStatus(summary.message, summary.type);
         uploadForm.reset();
+        pendingQueryGameSelection = gameSlug;
         await loadLibrary();
       } catch (error) {
         setStatus(error.message, "error");
@@ -620,6 +652,8 @@
 
     loadLibrary().catch(() => {
       libraryEl.innerHTML = '<p class="library-empty">Could not load the library.</p>';
+      queryGameSelect.innerHTML = '<option value="">Library unavailable</option>';
+      queryGameSelect.disabled = true;
     });
   </script>
 </body>
