@@ -316,6 +316,85 @@
       font-size: 0.85rem;
     }
 
+    .ask-top-panel {
+      position: sticky;
+      top: 0.75rem;
+      z-index: 5;
+      display: grid;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      padding: 0.85rem 0 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .ask-game-field label {
+      margin-bottom: 0.35rem;
+    }
+
+    .ask-game-field select {
+      margin-bottom: 0;
+    }
+
+    .chat-history-panel {
+      clear: both;
+      margin: 0;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(109, 100, 88, 0.06);
+    }
+
+    .chat-history-panel summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .chat-list {
+      display: grid;
+      gap: 0.45rem;
+      max-height: 13rem;
+      margin-top: 0.75rem;
+      overflow: auto;
+    }
+
+    .chat-list-empty {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .chat-load-button {
+      width: 100%;
+      padding: 0.6rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+    }
+
+    .chat-load-button:hover,
+    .chat-load-button.active {
+      border-color: var(--accent);
+      background: rgba(154, 52, 18, 0.1);
+    }
+
+    .chat-title {
+      display: block;
+      font-weight: 800;
+    }
+
+    .chat-meta,
+    .chat-preview {
+      display: block;
+      margin-top: 0.2rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.35;
+    }
+
     .manual-actions {
       display: flex;
       align-items: center;
@@ -385,6 +464,7 @@
 
     .query-result {
       margin-top: 1rem;
+      margin-bottom: 1.25rem;
       padding-top: 1rem;
       border-top: 1px solid var(--border);
     }
@@ -403,14 +483,17 @@
     .conversation {
       display: flex;
       flex-direction: column;
-      gap: 0.85rem;
+      gap: 1rem;
+      padding-bottom: 0.25rem;
     }
 
     .message {
+      min-width: 0;
       max-width: min(44rem, 100%);
       padding: 0.85rem;
       border-radius: 12px;
       line-height: 1.5;
+      overflow-wrap: break-word;
     }
 
     .message.user {
@@ -440,6 +523,7 @@
 
     .query-sources {
       margin-top: 1rem;
+      margin-bottom: 0.25rem;
       padding-top: 1rem;
       border-top: 1px solid var(--border);
     }
@@ -540,13 +624,22 @@
           <h2>Ask the rules</h2>
           <button type="button" id="clear-conversation-button" class="clear-conversation-button button-secondary" disabled>New conversation</button>
         </div>
+        <div class="ask-top-panel">
+          <div class="ask-game-field">
+            <label for="query-game">Board game</label>
+            <select id="query-game" name="game_slug" required>
+              <option value="">Loading library...</option>
+            </select>
+          </div>
+          <details class="chat-history-panel" open>
+            <summary>Previous chats</summary>
+            <div id="chat-list" class="chat-list">
+              <p class="chat-list-empty">Loading chats...</p>
+            </div>
+          </details>
+        </div>
         <div id="query-result" hidden></div>
         <form id="query-form">
-          <label for="query-game">Board game</label>
-          <select id="query-game" name="game_slug" required>
-            <option value="">Loading library...</option>
-          </select>
-
           <label for="query-question">Question</label>
           <textarea id="query-question" name="question" placeholder="How do I win?" required></textarea>
 
@@ -575,11 +668,14 @@
     const clearConversationButton = document.getElementById("clear-conversation-button");
     const queryStatusEl = document.getElementById("query-status");
     const queryResultEl = document.getElementById("query-result");
+    const chatListEl = document.getElementById("chat-list");
     let currentLibrary = [];
     let pendingQueryGameSelection = "";
+    let activeConversationId = "";
     let conversationGameSlug = "";
     let conversationHistory = [];
     let conversationTranscript = [];
+    let savedChats = [];
 
     const pages = {
       upload: {
@@ -691,8 +787,75 @@
       return Number.isFinite(score) ? score.toFixed(3) : "n/a";
     }
 
+    function formatChatDate(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return "";
+      }
+      return date.toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    function truncateText(text, maxLength = 120) {
+      const normalized = (text || "").replace(/\s+/g, " ").trim();
+      if (normalized.length <= maxLength) {
+        return normalized;
+      }
+      return `${normalized.slice(0, maxLength).trim()}...`;
+    }
+
     function updateQueryGameSelectState() {
       queryGameSelect.disabled = !currentLibrary.length || conversationTranscript.length > 0;
+    }
+
+    function updateActiveChatButton() {
+      chatListEl.querySelectorAll(".chat-load-button").forEach((button) => {
+        button.classList.toggle(
+          "active",
+          button.dataset.conversationId === activeConversationId
+        );
+      });
+    }
+
+    function renderChatList(chats) {
+      chatListEl.replaceChildren();
+      if (!chats.length) {
+        appendTextElement(
+          chatListEl,
+          "p",
+          "chat-list-empty",
+          "No saved chats yet."
+        );
+        return;
+      }
+
+      for (const chat of chats) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "chat-load-button";
+        button.dataset.conversationId = chat.id;
+        appendTextElement(button, "span", "chat-title", chat.title || "Conversation");
+        appendTextElement(
+          button,
+          "span",
+          "chat-meta",
+          `${chat.game_slug} · ${formatChatDate(chat.updated_at)}`
+        );
+        if (chat.last_message) {
+          appendTextElement(
+            button,
+            "span",
+            "chat-preview",
+            truncateText(chat.last_message)
+          );
+        }
+        chatListEl.appendChild(button);
+      }
+      updateActiveChatButton();
     }
 
     function createSourceDetails(sources) {
@@ -739,6 +902,7 @@
         queryResultEl.hidden = true;
         clearConversationButton.disabled = true;
         updateQueryGameSelectState();
+        updateActiveChatButton();
         return;
       }
 
@@ -770,14 +934,68 @@
       queryResultEl.hidden = false;
       clearConversationButton.disabled = false;
       updateQueryGameSelectState();
+      updateActiveChatButton();
     }
 
     function resetConversation() {
+      activeConversationId = "";
       conversationHistory = [];
       conversationTranscript = [];
       conversationGameSlug = queryGameSelect.value;
       setQueryStatus("");
       renderConversation();
+      updateActiveChatButton();
+    }
+
+    function setQueryGameSelection(gameSlug) {
+      if (!gameSlug) {
+        return;
+      }
+      const hasOption = Array.from(queryGameSelect.options)
+        .some((option) => option.value === gameSlug);
+      if (!hasOption) {
+        const option = document.createElement("option");
+        option.value = gameSlug;
+        option.textContent = gameSlug;
+        queryGameSelect.appendChild(option);
+      }
+      queryGameSelect.value = gameSlug;
+    }
+
+    async function loadChats() {
+      try {
+        const payload = await requestJson("/chats");
+        savedChats = payload.chats || [];
+        renderChatList(savedChats);
+      } catch (error) {
+        chatListEl.replaceChildren();
+        appendTextElement(
+          chatListEl,
+          "p",
+          "chat-list-empty",
+          error.message
+        );
+      }
+    }
+
+    async function loadConversation(conversationId) {
+      setQueryStatus("Loading conversation...");
+      const payload = await requestJson(`/chats/${encodeURIComponent(conversationId)}`);
+      activeConversationId = payload.id;
+      conversationGameSlug = payload.game_slug;
+      setQueryGameSelection(payload.game_slug);
+      conversationHistory = (payload.messages || []).map((message) => ({
+        role: message.role,
+        content: message.content,
+      }));
+      conversationTranscript = (payload.messages || []).map((message) => ({
+        role: message.role,
+        content: message.content,
+        sources: message.sources || [],
+      }));
+      renderConversation();
+      navigateToPage("ask");
+      setQueryStatus(`Loaded ${payload.title}.`, "success");
     }
 
     function sanitizeFilename(filename) {
@@ -1024,6 +1242,21 @@
       resetConversation();
     });
 
+    chatListEl.addEventListener("click", async (event) => {
+      const button = event.target instanceof Element
+        ? event.target.closest(".chat-load-button")
+        : null;
+      if (!button?.dataset.conversationId) {
+        return;
+      }
+
+      try {
+        await loadConversation(button.dataset.conversationId);
+      } catch (error) {
+        setQueryStatus(error.message, "error");
+      }
+    });
+
     libraryEl.addEventListener("change", (event) => {
       if (event.target instanceof Element && event.target.matches(".manual-select")) {
         updateLibraryActionButtons();
@@ -1180,14 +1413,20 @@
       setQueryStatus("Searching manuals…");
 
       try {
+        const queryPayload = {
+          game_slug: gameSlug,
+          question,
+        };
+        if (activeConversationId) {
+          queryPayload.conversation_id = activeConversationId;
+        } else {
+          queryPayload.history = conversationHistory;
+        }
+
         const response = await fetch("/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            game_slug: gameSlug,
-            question,
-            history: conversationHistory,
-          }),
+          body: JSON.stringify(queryPayload),
         });
         const payload = await response.json();
 
@@ -1195,6 +1434,7 @@
           throw new Error(payload.detail || "Query failed");
         }
 
+        activeConversationId = payload.conversation_id || activeConversationId;
         const sources = payload.sources || [];
         conversationTranscript.push(
           { role: "user", content: question },
@@ -1211,6 +1451,7 @@
         ];
         document.getElementById("query-question").value = "";
         renderConversation();
+        await loadChats();
         setQueryStatus(
           sources.length
             ? `Found ${sources.length} relevant passage${sources.length === 1 ? "" : "s"}.`
@@ -1303,6 +1544,7 @@
       queryGameSelect.innerHTML = '<option value="">Library unavailable</option>';
       queryGameSelect.disabled = true;
     });
+    loadChats();
     navigateToPage(pageFromPath(window.location.pathname), {
       replace: window.location.pathname === "/",
     });
