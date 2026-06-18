@@ -1,4 +1,3 @@
-import asyncio
 from pathlib import Path
 
 import fitz
@@ -6,9 +5,10 @@ import pytest
 
 from tabletop_manual_retriever.ingest.chunking import chunk_manual
 from tabletop_manual_retriever.ingest.models import ParsedManual, TextBlock
-from tabletop_manual_retriever.ingest.router import ingest_endpoint
-from tabletop_manual_retriever.ingest.schemas import IngestRequest
+from tabletop_manual_retriever.ingest.schemas import DeingestResponse, IngestResponse
 from tabletop_manual_retriever.ingest.service import (
+    DeingestedManual,
+    DeingestResult,
     IngestedManual,
     IngestResult,
     IngestService,
@@ -35,6 +35,14 @@ class FakeVectorStore:
     def upsert_chunks(self, **kwargs) -> int:
         self.calls.append(kwargs)
         return len(kwargs["chunks"])
+
+    def delete_chunks(self, **kwargs) -> int:
+        self.calls.append(kwargs)
+        return 3
+
+    def count_chunks(self, **kwargs) -> int:
+        self.calls.append(kwargs)
+        return 5
 
 
 def _make_sample_pdf(path: Path) -> None:
@@ -111,36 +119,62 @@ def test_ingest_service_parses_pdf_embeds_chunks_and_upserts(
     assert (tmp_path / "catan" / "rules.json").is_file()
 
 
-def test_ingest_endpoint_returns_ingest_response() -> None:
-    class FakeService:
-        def ingest_manuals(
-            self,
-            game_slug: str,
-            filename: str | None = None,
-        ) -> IngestResult:
-            assert game_slug == "catan"
-            assert filename == "rules.pdf"
-            return IngestResult(
-                game_slug=game_slug,
-                collection_name="manuals",
-                manuals=(
-                    IngestedManual(
-                        filename="rules.pdf",
-                        path="data/uploads/catan/rules.pdf",
-                        parsed_path="data/uploads/catan/rules.json",
-                        page_count=1,
-                        chunk_count=2,
-                        point_count=2,
-                    ),
-                ),
-            )
-
-    response = asyncio.run(
-        ingest_endpoint(
-            IngestRequest(game_slug="catan", filename="rules.pdf"),
-            FakeService(),
-        )
+def test_ingest_service_deletes_chunks_for_manual() -> None:
+    fake_store = FakeVectorStore()
+    service = IngestService(
+        embedder=FakeEmbedder(),
+        vector_store=fake_store,
+        collection_name="manuals",
     )
+
+    result = service.deingest_manuals("catan", "rules.pdf")
+
+    assert result.game_slug == "catan"
+    assert result.collection_name == "manuals"
+    assert result.total_points == 3
+    assert result.manuals[0].filename == "rules.pdf"
+    assert fake_store.calls[0] == {
+        "collection_name": "manuals",
+        "game_slug": "catan",
+        "filename": "rules.pdf",
+    }
+
+
+def test_ingest_service_counts_chunks_for_manual() -> None:
+    fake_store = FakeVectorStore()
+    service = IngestService(
+        embedder=FakeEmbedder(),
+        vector_store=fake_store,
+        collection_name="manuals",
+    )
+
+    count = service.count_manual_chunks("catan", "rules.pdf")
+
+    assert count == 5
+    assert fake_store.calls[0] == {
+        "collection_name": "manuals",
+        "game_slug": "catan",
+        "filename": "rules.pdf",
+    }
+
+
+def test_ingest_response_serializes_result() -> None:
+    result = IngestResult(
+        game_slug="catan",
+        collection_name="manuals",
+        manuals=(
+            IngestedManual(
+                filename="rules.pdf",
+                path="data/uploads/catan/rules.pdf",
+                parsed_path="data/uploads/catan/rules.json",
+                page_count=1,
+                chunk_count=2,
+                point_count=2,
+            ),
+        ),
+    )
+
+    response = IngestResponse.from_result(result)
 
     assert response.model_dump() == {
         "game_slug": "catan",
@@ -154,6 +188,33 @@ def test_ingest_endpoint_returns_ingest_response() -> None:
                 "parsed_path": "data/uploads/catan/rules.json",
                 "page_count": 1,
                 "chunk_count": 2,
+                "point_count": 2,
+            }
+        ],
+    }
+
+
+def test_deingest_response_serializes_result() -> None:
+    result = DeingestResult(
+        game_slug="catan",
+        collection_name="manuals",
+        manuals=(
+            DeingestedManual(
+                filename="rules.pdf",
+                point_count=2,
+            ),
+        ),
+    )
+
+    response = DeingestResponse.from_result(result)
+
+    assert response.model_dump() == {
+        "game_slug": "catan",
+        "collection_name": "manuals",
+        "total_points": 2,
+        "manuals": [
+            {
+                "filename": "rules.pdf",
                 "point_count": 2,
             }
         ],

@@ -61,6 +61,24 @@ class VectorStore(Protocol):
     ) -> int:
         """Store chunk vectors and return the number of upserted points."""
 
+    def delete_chunks(
+        self,
+        *,
+        collection_name: str,
+        game_slug: str,
+        filename: str | None = None,
+    ) -> int:
+        """Delete chunk vectors and return the number of removed points."""
+
+    def count_chunks(
+        self,
+        *,
+        collection_name: str,
+        game_slug: str,
+        filename: str | None = None,
+    ) -> int:
+        """Return the number of stored chunk vectors matching the filters."""
+
     def search_chunks(
         self,
         *,
@@ -92,6 +110,23 @@ class IngestResult:
     @property
     def total_chunks(self) -> int:
         return sum(manual.chunk_count for manual in self.manuals)
+
+    @property
+    def total_points(self) -> int:
+        return sum(manual.point_count for manual in self.manuals)
+
+
+@dataclass(frozen=True)
+class DeingestedManual:
+    filename: str | None
+    point_count: int
+
+
+@dataclass(frozen=True)
+class DeingestResult:
+    game_slug: str
+    collection_name: str
+    manuals: tuple[DeingestedManual, ...]
 
     @property
     def total_points(self) -> int:
@@ -188,6 +223,108 @@ class QdrantVectorStore:
             return len(points)
         except Exception as exc:
             raise IngestStoreError(f"Could not write chunks to Qdrant: {exc}") from exc
+
+    def delete_chunks(
+        self,
+        *,
+        collection_name: str,
+        game_slug: str,
+        filename: str | None = None,
+    ) -> int:
+        try:
+            from qdrant_client import QdrantClient, models
+        except ImportError as exc:
+            raise IngestDependencyError(
+                "Install qdrant-client to delete embeddings from Qdrant."
+            ) from exc
+
+        try:
+            if self._client is None:
+                self._client = QdrantClient(
+                    url=self.url,
+                    check_compatibility=False,
+                )
+
+            if not self._client.collection_exists(collection_name=collection_name):
+                return 0
+
+            filter_conditions = [
+                models.FieldCondition(
+                    key="game_slug",
+                    match=models.MatchValue(value=game_slug),
+                )
+            ]
+            if filename is not None:
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="filename",
+                        match=models.MatchValue(value=filename),
+                    )
+                )
+            point_filter = models.Filter(must=filter_conditions)
+            count = self._client.count(
+                collection_name=collection_name,
+                count_filter=point_filter,
+                exact=True,
+            ).count
+            self._client.delete(
+                collection_name=collection_name,
+                points_selector=models.FilterSelector(filter=point_filter),
+                wait=True,
+            )
+            return int(count)
+        except Exception as exc:
+            raise IngestStoreError(
+                f"Could not delete chunks from Qdrant: {exc}"
+            ) from exc
+
+    def count_chunks(
+        self,
+        *,
+        collection_name: str,
+        game_slug: str,
+        filename: str | None = None,
+    ) -> int:
+        try:
+            from qdrant_client import QdrantClient, models
+        except ImportError as exc:
+            raise IngestDependencyError(
+                "Install qdrant-client to count embeddings in Qdrant."
+            ) from exc
+
+        try:
+            if self._client is None:
+                self._client = QdrantClient(
+                    url=self.url,
+                    check_compatibility=False,
+                )
+
+            if not self._client.collection_exists(collection_name=collection_name):
+                return 0
+
+            filter_conditions = [
+                models.FieldCondition(
+                    key="game_slug",
+                    match=models.MatchValue(value=game_slug),
+                )
+            ]
+            if filename is not None:
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="filename",
+                        match=models.MatchValue(value=filename),
+                    )
+                )
+
+            return int(
+                self._client.count(
+                    collection_name=collection_name,
+                    count_filter=models.Filter(must=filter_conditions),
+                    exact=True,
+                ).count
+            )
+        except Exception as exc:
+            raise IngestStoreError(f"Could not count chunks in Qdrant: {exc}") from exc
 
     def search_chunks(
         self,
@@ -298,6 +435,50 @@ class IngestService:
             game_slug=slug,
             collection_name=self.collection_name,
             manuals=manuals,
+        )
+
+    def deingest_manuals(
+        self,
+        game_slug: str,
+        filename: str | None = None,
+    ) -> DeingestResult:
+        slug = validate_game_slug(game_slug)
+        manual_filename = (
+            sanitize_pdf_filename(filename) if filename is not None else None
+        )
+
+        assert self.vector_store is not None
+        point_count = self.vector_store.delete_chunks(
+            collection_name=self.collection_name,
+            game_slug=slug,
+            filename=manual_filename,
+        )
+        return DeingestResult(
+            game_slug=slug,
+            collection_name=self.collection_name,
+            manuals=(
+                DeingestedManual(
+                    filename=manual_filename,
+                    point_count=point_count,
+                ),
+            ),
+        )
+
+    def count_manual_chunks(
+        self,
+        game_slug: str,
+        filename: str | None = None,
+    ) -> int:
+        slug = validate_game_slug(game_slug)
+        manual_filename = (
+            sanitize_pdf_filename(filename) if filename is not None else None
+        )
+
+        assert self.vector_store is not None
+        return self.vector_store.count_chunks(
+            collection_name=self.collection_name,
+            game_slug=slug,
+            filename=manual_filename,
         )
 
     def _manual_filenames(self, game_slug: str, filename: str | None) -> list[str]:

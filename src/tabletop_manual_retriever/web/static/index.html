@@ -126,6 +126,24 @@
     button:hover { background: var(--accent-hover); }
     button:disabled { opacity: 0.6; cursor: wait; }
 
+    .button-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--ink);
+    }
+
+    .button-secondary:hover {
+      background: rgba(109, 100, 88, 0.12);
+    }
+
+    .button-danger {
+      background: #b91c1c;
+    }
+
+    .button-danger:hover {
+      background: #991b1b;
+    }
+
     .hint {
       margin-top: 0.75rem;
       color: var(--muted);
@@ -166,9 +184,25 @@
       margin-top: 0;
     }
 
+    .game-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.65rem;
+    }
+
     .game h3 {
-      margin: 0 0 0.65rem;
+      margin: 0;
       font-size: 1.15rem;
+    }
+
+    .select-game-button {
+      width: auto;
+      flex: 0 0 auto;
+      padding: 0.45rem 0.7rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
     }
 
     .manual {
@@ -182,12 +216,38 @@
 
     .manual:first-of-type { border-top: 0; }
 
+    .manual-main {
+      display: flex;
+      gap: 0.65rem;
+      min-width: 0;
+    }
+
+    .manual-select {
+      width: 1rem;
+      height: 1rem;
+      flex: 0 0 auto;
+      margin-top: 0.15rem;
+    }
+
     .manual-name { font-weight: 600; }
 
     .manual-meta {
       color: var(--muted);
       text-align: right;
       white-space: nowrap;
+    }
+
+    .library-toolbar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .library-toolbar button {
+      width: auto;
+      flex: 1;
+      padding: 0.65rem 0.75rem;
+      font-size: 0.9rem;
     }
 
     .manual-actions {
@@ -206,25 +266,42 @@
       font-size: 0.82rem;
     }
 
-    .ingest-status {
+    .manual-status {
       color: var(--muted);
       font-size: 0.82rem;
       white-space: nowrap;
     }
 
-    .ingest-status.success { color: var(--ok); }
-    .ingest-status.error { color: #b91c1c; }
+    .manual-status.success { color: var(--ok); }
+    .manual-status.error { color: #b91c1c; }
+    .manual-status.warning { color: #b45309; }
 
     .badge {
       display: inline-block;
       margin-left: 0.4rem;
       padding: 0.1rem 0.45rem;
       border-radius: 999px;
-      background: rgba(22, 101, 52, 0.12);
-      color: var(--ok);
+      background: rgba(109, 100, 88, 0.14);
+      color: var(--muted);
       font-size: 0.78rem;
       font-weight: 700;
       vertical-align: middle;
+    }
+
+    .badge.parsed,
+    .badge.indexed {
+      background: rgba(22, 101, 52, 0.12);
+      color: var(--ok);
+    }
+
+    .badge.not-indexed {
+      background: rgba(180, 83, 9, 0.12);
+      color: #b45309;
+    }
+
+    .badge.index-unknown {
+      background: rgba(109, 100, 88, 0.16);
+      color: var(--muted);
     }
 
     textarea {
@@ -337,9 +414,14 @@
 
       <section class="card">
         <h2>Library</h2>
+        <div class="library-toolbar">
+          <button type="button" id="ingest-selected-button" disabled>Ingest selected</button>
+          <button type="button" id="deingest-selected-button" class="button-secondary" disabled>Deingest selected</button>
+        </div>
         <div id="library">
           <p class="library-empty">Loading…</p>
         </div>
+        <div id="library-status" class="status" aria-live="polite"></div>
       </section>
 
       <section class="card">
@@ -355,7 +437,7 @@
 
           <button type="submit" id="query-button">Search manuals</button>
         </form>
-        <p class="hint">Ingest manuals first so their chunks are available in Qdrant.</p>
+        <p class="hint">Select manuals in the library and ingest them before asking questions.</p>
         <div id="query-status" class="status" aria-live="polite"></div>
         <div id="query-result" hidden></div>
       </section>
@@ -367,6 +449,9 @@
     const uploadButton = document.getElementById("upload-button");
     const statusEl = document.getElementById("status");
     const libraryEl = document.getElementById("library");
+    const libraryStatusEl = document.getElementById("library-status");
+    const ingestSelectedButton = document.getElementById("ingest-selected-button");
+    const deingestSelectedButton = document.getElementById("deingest-selected-button");
     const queryForm = document.getElementById("query-form");
     const queryGameSelect = document.getElementById("query-game");
     const queryButton = document.getElementById("query-button");
@@ -389,6 +474,18 @@
       return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
+    function renderIndexBadge(manual) {
+      if (manual.index_status === "unknown" || manual.indexed == null) {
+        return '<span class="badge index-unknown">Index unknown</span>';
+      }
+      if (manual.indexed) {
+        const pointCount = manual.indexed_point_count || 0;
+        const chunkLabel = `${pointCount} indexed chunk${pointCount === 1 ? "" : "s"}`;
+        return `<span class="badge indexed" title="${chunkLabel}">Indexed</span>`;
+      }
+      return '<span class="badge not-indexed">Not indexed</span>';
+    }
+
     function setStatus(message, type = "") {
       statusEl.textContent = message;
       statusEl.className = `status${type ? ` ${type}` : ""}`;
@@ -397,6 +494,11 @@
     function setQueryStatus(message, type = "") {
       queryStatusEl.textContent = message;
       queryStatusEl.className = `status${type ? ` ${type}` : ""}`;
+    }
+
+    function setLibraryStatus(message, type = "") {
+      libraryStatusEl.textContent = message;
+      libraryStatusEl.className = `status${type ? ` ${type}` : ""}`;
     }
 
     function appendTextElement(parent, tagName, className, text) {
@@ -496,6 +598,101 @@
       return { message, type: replaced.length ? "warning" : "success" };
     }
 
+    async function requestJson(url, options = {}) {
+      const response = await fetch(url, options);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.detail || "Request failed");
+      }
+      return payload;
+    }
+
+    function selectedManuals() {
+      return Array.from(libraryEl.querySelectorAll(".manual-select:checked"))
+        .map((input) => ({
+          gameSlug: input.dataset.gameSlug,
+          filename: input.dataset.filename,
+        }))
+        .filter((manual) => manual.gameSlug && manual.filename);
+    }
+
+    function manualCheckboxesForGame(gameSlug) {
+      return Array.from(
+        libraryEl.querySelectorAll(
+          `.manual-select[data-game-slug="${CSS.escape(gameSlug)}"]`
+        )
+      );
+    }
+
+    function updateGameSelectButtons() {
+      libraryEl.querySelectorAll(".select-game-button").forEach((button) => {
+        const gameSlug = button.dataset.gameSlug || "";
+        const checkboxes = manualCheckboxesForGame(gameSlug);
+        const allSelected = checkboxes.length > 0 && checkboxes.every((input) => input.checked);
+        button.textContent = allSelected ? "Clear" : "Select all";
+        button.setAttribute("aria-pressed", String(allSelected));
+      });
+    }
+
+    function updateLibraryActionButtons() {
+      const hasSelection = selectedManuals().length > 0;
+      ingestSelectedButton.disabled = !hasSelection;
+      deingestSelectedButton.disabled = !hasSelection;
+      updateGameSelectButtons();
+    }
+
+    function setLibraryBusy(isBusy) {
+      libraryEl.querySelectorAll("button, input").forEach((control) => {
+        control.disabled = isBusy;
+      });
+      ingestSelectedButton.disabled = isBusy || !selectedManuals().length;
+      deingestSelectedButton.disabled = isBusy || !selectedManuals().length;
+    }
+
+    function manualStatusElement(gameSlug, filename) {
+      return libraryEl.querySelector(
+        `.manual-status[data-game-slug="${CSS.escape(gameSlug)}"][data-filename="${CSS.escape(filename)}"]`
+      );
+    }
+
+    function setManualStatus(manual, message, type = "") {
+      const status = manualStatusElement(manual.gameSlug, manual.filename);
+      if (!status) {
+        return;
+      }
+      status.textContent = message;
+      status.className = `manual-status${type ? ` ${type}` : ""}`;
+    }
+
+    async function ingestManual(manual) {
+      return requestJson("/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          game_slug: manual.gameSlug,
+          filename: manual.filename,
+        }),
+      });
+    }
+
+    async function deingestManual(manual) {
+      return requestJson("/ingest", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          game_slug: manual.gameSlug,
+          filename: manual.filename,
+        }),
+      });
+    }
+
+    async function deleteUploadedManual(manual) {
+      return requestJson(
+        `/games/${encodeURIComponent(manual.gameSlug)}/manuals/${encodeURIComponent(manual.filename)}`,
+        { method: "DELETE" }
+      );
+    }
+
     function renderQueryGameOptions(library) {
       const previousSelection = pendingQueryGameSelection || queryGameSelect.value;
       pendingQueryGameSelection = "";
@@ -523,28 +720,44 @@
 
       if (!library.length) {
         libraryEl.innerHTML = '<p class="library-empty">No manuals yet. Upload your first rulebook.</p>';
+        updateLibraryActionButtons();
         return;
       }
 
       libraryEl.innerHTML = library.map((game) => {
         const manuals = game.manuals.map((manual) => `
           <div class="manual">
-            <div>
-              <div class="manual-name">${manual.filename}</div>
-              <div class="manual-meta">${manual.parsed_path || ""}</div>
+            <div class="manual-main">
+              <input
+                type="checkbox"
+                class="manual-select"
+                aria-label="Select ${manual.filename}"
+                data-game-slug="${game.game_slug}"
+                data-filename="${manual.filename}"
+              >
+              <div>
+                <div class="manual-name">${manual.filename}</div>
+                <div class="manual-meta">${manual.parsed_path || ""}</div>
+              </div>
             </div>
             <div class="manual-meta">
               ${manual.page_count != null ? `${manual.page_count} pages` : ""}
-              ${manual.parsed ? '<span class="badge">parsed</span>' : ""}
+              ${manual.parsed ? '<span class="badge parsed">parsed</span>' : ""}
+              ${renderIndexBadge(manual)}
               <div>${formatBytes(manual.size_bytes)}</div>
               <div class="manual-actions">
-                <span class="ingest-status" aria-live="polite"></span>
-                <button
-                  type="button"
-                  class="ingest-button"
+                <span
+                  class="manual-status"
+                  aria-live="polite"
                   data-game-slug="${game.game_slug}"
                   data-filename="${manual.filename}"
-                >Ingest</button>
+                ></span>
+                <button
+                  type="button"
+                  class="remove-manual-button button-danger"
+                  data-game-slug="${game.game_slug}"
+                  data-filename="${manual.filename}"
+                >Remove</button>
               </div>
             </div>
           </div>
@@ -554,11 +767,19 @@
 
         return `
           <article class="game">
-            <h3>${game.game_slug} <span class="game-count">(${countLabel})</span></h3>
+            <div class="game-heading">
+              <h3>${game.game_slug} <span class="game-count">(${countLabel})</span></h3>
+              <button
+                type="button"
+                class="select-game-button button-secondary"
+                data-game-slug="${game.game_slug}"
+              >Select all</button>
+            </div>
             ${manuals}
           </article>
         `;
       }).join("");
+      updateLibraryActionButtons();
     }
 
     async function loadLibrary() {
@@ -570,45 +791,135 @@
       renderLibrary(payload.library);
     }
 
+    libraryEl.addEventListener("change", (event) => {
+      if (event.target instanceof Element && event.target.matches(".manual-select")) {
+        updateLibraryActionButtons();
+      }
+    });
+
     libraryEl.addEventListener("click", async (event) => {
+      const selectGameButton = event.target instanceof Element
+        ? event.target.closest(".select-game-button")
+        : null;
+      if (selectGameButton) {
+        const gameSlug = selectGameButton.dataset.gameSlug;
+        if (!gameSlug) {
+          return;
+        }
+
+        const checkboxes = manualCheckboxesForGame(gameSlug);
+        const shouldSelect = checkboxes.some((checkbox) => !checkbox.checked);
+        checkboxes.forEach((checkbox) => {
+          checkbox.checked = shouldSelect;
+        });
+        updateLibraryActionButtons();
+        return;
+      }
+
       const button = event.target instanceof Element
-        ? event.target.closest(".ingest-button")
+        ? event.target.closest(".remove-manual-button")
         : null;
       if (!button) {
         return;
       }
 
-      const status = button.parentElement.querySelector(".ingest-status");
-      let completed = false;
-      button.disabled = true;
-      status.textContent = "Indexing…";
-      status.className = "ingest-status";
+      const manual = {
+        gameSlug: button.dataset.gameSlug,
+        filename: button.dataset.filename,
+      };
+      if (!manual.gameSlug || !manual.filename) {
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Remove ${manual.filename} from ${manual.gameSlug}? This will also remove its indexed chunks.`
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      setLibraryBusy(true);
+      setManualStatus(manual, "Removing...");
+      setLibraryStatus(`Removing ${manual.filename}...`);
 
       try {
-        const response = await fetch("/ingest", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            game_slug: button.dataset.gameSlug,
-            filename: button.dataset.filename,
-          }),
-        });
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(payload.detail || "Ingest failed");
-        }
-
-        status.textContent = `Indexed ${payload.total_chunks} chunks`;
-        status.className = "ingest-status success";
-        button.textContent = "Indexed";
-        queryGameSelect.value = button.dataset.gameSlug;
-        completed = true;
+        await deingestManual(manual);
+        await deleteUploadedManual(manual);
+        setLibraryStatus(`Removed ${manual.filename}.`, "success");
+        await loadLibrary();
       } catch (error) {
-        status.textContent = error.message;
-        status.className = "ingest-status error";
+        setManualStatus(manual, error.message, "error");
+        setLibraryStatus(error.message, "error");
       } finally {
-        button.disabled = completed;
+        setLibraryBusy(false);
+        updateLibraryActionButtons();
+      }
+    });
+
+    ingestSelectedButton.addEventListener("click", async () => {
+      const manuals = selectedManuals();
+      if (!manuals.length) {
+        setLibraryStatus("Choose at least one manual.", "warning");
+        return;
+      }
+
+      setLibraryBusy(true);
+      setLibraryStatus(`Indexing ${manuals.length} manual${manuals.length === 1 ? "" : "s"}...`);
+
+      let totalChunks = 0;
+      let activeManual = null;
+      try {
+        for (const manual of manuals) {
+          activeManual = manual;
+          setManualStatus(manual, "Indexing...");
+          const payload = await ingestManual(manual);
+          totalChunks += payload.total_chunks || 0;
+          setManualStatus(manual, `Indexed ${payload.total_chunks} chunks`, "success");
+          queryGameSelect.value = manual.gameSlug;
+        }
+        setLibraryStatus(`Indexed ${totalChunks} chunks.`, "success");
+        await loadLibrary();
+      } catch (error) {
+        if (activeManual) {
+          setManualStatus(activeManual, error.message, "error");
+        }
+        setLibraryStatus(error.message, "error");
+      } finally {
+        setLibraryBusy(false);
+        updateLibraryActionButtons();
+      }
+    });
+
+    deingestSelectedButton.addEventListener("click", async () => {
+      const manuals = selectedManuals();
+      if (!manuals.length) {
+        setLibraryStatus("Choose at least one manual.", "warning");
+        return;
+      }
+
+      setLibraryBusy(true);
+      setLibraryStatus(`Removing indexed chunks for ${manuals.length} manual${manuals.length === 1 ? "" : "s"}...`);
+
+      let totalPoints = 0;
+      let activeManual = null;
+      try {
+        for (const manual of manuals) {
+          activeManual = manual;
+          setManualStatus(manual, "Deingesting...");
+          const payload = await deingestManual(manual);
+          totalPoints += payload.total_points || 0;
+          setManualStatus(manual, `Removed ${payload.total_points} chunks`, "success");
+        }
+        setLibraryStatus(`Removed ${totalPoints} indexed chunks.`, "success");
+        await loadLibrary();
+      } catch (error) {
+        if (activeManual) {
+          setManualStatus(activeManual, error.message, "error");
+        }
+        setLibraryStatus(error.message, "error");
+      } finally {
+        setLibraryBusy(false);
+        updateLibraryActionButtons();
       }
     });
 
@@ -732,6 +1043,8 @@
 
     loadLibrary().catch(() => {
       libraryEl.innerHTML = '<p class="library-empty">Could not load the library.</p>';
+      ingestSelectedButton.disabled = true;
+      deingestSelectedButton.disabled = true;
       queryGameSelect.innerHTML = '<option value="">Library unavailable</option>';
       queryGameSelect.disabled = true;
     });

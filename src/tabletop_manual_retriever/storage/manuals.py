@@ -71,6 +71,27 @@ def save_manual(
     return destination.resolve(), existed
 
 
+def delete_manual(game_slug: str, filename: str) -> tuple[Path, Path | None]:
+    pdf_path = manual_path(game_slug, filename)
+    if not pdf_path.is_file():
+        raise FileNotFoundError(f"Manual not found: {pdf_path.name}")
+
+    parsed_path = parsed_manual_path(pdf_path)
+    pdf_path.unlink()
+
+    removed_parsed_path = None
+    if parsed_path.is_file():
+        parsed_path.unlink()
+        removed_parsed_path = parsed_path.resolve()
+
+    try:
+        pdf_path.parent.rmdir()
+    except OSError:
+        pass
+
+    return pdf_path.resolve(), removed_parsed_path
+
+
 def list_games() -> list[str]:
     if not UPLOADS_DIR.exists():
         return []

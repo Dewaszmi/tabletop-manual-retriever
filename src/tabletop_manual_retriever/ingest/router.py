@@ -7,7 +7,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from tabletop_manual_retriever.ingest import parse_pdf
-from tabletop_manual_retriever.ingest.schemas import IngestRequest, IngestResponse
+from tabletop_manual_retriever.ingest.schemas import (
+    DeingestResponse,
+    IngestRequest,
+    IngestResponse,
+)
 from tabletop_manual_retriever.ingest.service import (
     IngestDependencyError,
     IngestService,
@@ -72,3 +76,24 @@ async def ingest_endpoint(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return IngestResponse.from_result(result)
+
+
+@router.delete("/ingest", response_model=DeingestResponse)
+async def deingest_endpoint(
+    request: IngestRequest,
+    service: Annotated[IngestService, Depends(get_ingest_service)],
+) -> DeingestResponse:
+    try:
+        result = await asyncio.to_thread(
+            service.deingest_manuals,
+            game_slug=request.game_slug,
+            filename=request.filename,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except IngestDependencyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except IngestStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return DeingestResponse.from_result(result)
