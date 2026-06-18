@@ -30,13 +30,20 @@ class AnswerGenerator(Protocol):
 
 
 _SYSTEM_PROMPT = (
-    "You answer questions about tabletop game rules using only the provided manual "
-    "excerpts. If the excerpts do not contain enough information, say you could not "
-    "find it in the manual. Cite source numbers like [1] when referring to specific "
-    "passages. Use the conversation history to resolve follow-up questions, but do "
-    "not invent rules that are not supported by the excerpts. Be concise and practical."
-)
+    """
+    You are a strict tabletop rules arbiter. Answer questions using ONLY the provided excerpts.
 
+    INSTRUCTIONS:
+    1. Read ALL provided excerpts completely.
+    2. Identify the specific entity, player, or condition that answers the user's question. 
+    3. If the answer does not make sense on itself or relies on an ambiguous term (like "total", "it", or "this"), use the surrounding text to define it.
+    4. If the answer is not explicitly stated, output exactly: "Answer: Not found in manual."
+    5. Output your response in this exact format, and nothing else:
+
+    Answer: [fully self-contained answer]
+    Citation: [Source Number]
+    """
+)
 
 def build_llm_context(sources: Sequence[RetrievedChunk]) -> str:
     if not sources:

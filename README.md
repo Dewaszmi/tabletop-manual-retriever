@@ -71,7 +71,7 @@ Defaults are set in `docker-compose.yaml`. Common overrides:
 | `LLM_MODEL` | `llama3.2:latest` | Must match a model in `ollama list` |
 | `LLM_BASE_URL` | `http://ollama:11434/v1` | OpenAI-compatible chat API |
 | `QDRANT_COLLECTION` | `manual_chunks` | Vector collection name |
-| `RAG_TOP_K` | `5` | Number of chunks retrieved per query |
+| `RAG_TOP_K` | `10` | Number of chunks retrieved per query |
 
 If `LLM_BASE_URL` / `LLM_MODEL` are unset, `/query` falls back to returning retrieved excerpts (`answer_mode: "excerpt"`).
 
