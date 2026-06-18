@@ -50,27 +50,73 @@
       padding: 2.5rem 1.25rem 4rem;
     }
 
-    header h1 {
+    .site-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1.25rem;
+    }
+
+    .site-header h1 {
       margin: 0 0 0.35rem;
       font-size: clamp(1.8rem, 4vw, 2.4rem);
       letter-spacing: -0.03em;
     }
 
-    header p {
+    .site-header p {
       margin: 0;
       color: var(--muted);
       max-width: 42rem;
       line-height: 1.5;
     }
 
-    .grid {
-      display: grid;
-      gap: 1.25rem;
+    .page-nav {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      flex: 0 0 auto;
+    }
+
+    .page-nav a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.35rem;
+      padding: 0.5rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--ink);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .page-nav a:hover {
+      background: rgba(109, 100, 88, 0.12);
+    }
+
+    .page-nav a[aria-current="page"] {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .page-shell {
       margin-top: 2rem;
     }
 
-    @media (min-width: 760px) {
-      .grid { grid-template-columns: 1fr 1.2fr; }
+    .page[hidden] {
+      display: none;
+    }
+
+    @media (max-width: 720px) {
+      .site-header {
+        display: block;
+      }
+
+      .page-nav {
+        justify-content: flex-start;
+        margin-top: 1rem;
+      }
     }
 
     .card {
@@ -387,13 +433,20 @@
 </head>
 <body>
   <main>
-    <header>
-      <h1>Manual Library</h1>
-      <p>Upload one or more rulebook PDFs for a board game. Files are saved under <code>data/uploads/&lt;game&gt;/</code> and parsed automatically into JSON beside each PDF.</p>
+    <header class="site-header">
+      <div>
+        <h1>Manual Library</h1>
+        <p id="page-summary">Upload one or more rulebook PDFs for a board game.</p>
+      </div>
+      <nav class="page-nav" aria-label="Primary">
+        <a href="/upload" data-page-link="upload">Upload</a>
+        <a href="/library" data-page-link="library">Library</a>
+        <a href="/ask" data-page-link="ask">Ask</a>
+      </nav>
     </header>
 
-    <div class="grid">
-      <section class="card">
+    <div class="page-shell">
+      <section class="card page" data-page="upload">
         <h2>Add to library</h2>
         <form id="upload-form">
           <label for="game-name">Board game</label>
@@ -412,7 +465,7 @@
         <div id="status" class="status" aria-live="polite"></div>
       </section>
 
-      <section class="card">
+      <section class="card page" data-page="library" hidden>
         <h2>Library</h2>
         <div class="library-toolbar">
           <button type="button" id="ingest-selected-button" disabled>Ingest selected</button>
@@ -424,7 +477,7 @@
         <div id="library-status" class="status" aria-live="polite"></div>
       </section>
 
-      <section class="card">
+      <section class="card page" data-page="ask" hidden>
         <h2>Ask the rules</h2>
         <form id="query-form">
           <label for="query-game">Board game</label>
@@ -448,6 +501,9 @@
     const uploadForm = document.getElementById("upload-form");
     const uploadButton = document.getElementById("upload-button");
     const statusEl = document.getElementById("status");
+    const pageSummaryEl = document.getElementById("page-summary");
+    const pageSections = document.querySelectorAll("[data-page]");
+    const pageLinks = document.querySelectorAll("[data-page-link]");
     const libraryEl = document.getElementById("library");
     const libraryStatusEl = document.getElementById("library-status");
     const ingestSelectedButton = document.getElementById("ingest-selected-button");
@@ -459,6 +515,61 @@
     const queryResultEl = document.getElementById("query-result");
     let currentLibrary = [];
     let pendingQueryGameSelection = "";
+
+    const pages = {
+      upload: {
+        path: "/upload",
+        summary: "Upload one or more rulebook PDFs for a board game.",
+      },
+      library: {
+        path: "/library",
+        summary: "Review uploaded manuals, select documents, and manage Qdrant indexing.",
+      },
+      ask: {
+        path: "/ask",
+        summary: "Choose an indexed game manual and ask a rules question.",
+      },
+    };
+
+    function pageFromPath(pathname) {
+      const normalizedPath = pathname.replace(/\/+$/, "") || "/";
+      if (normalizedPath === "/") {
+        return "upload";
+      }
+      return Object.entries(pages).find(([, page]) => page.path === normalizedPath)?.[0] || "upload";
+    }
+
+    function showPage(pageName) {
+      const page = pages[pageName] ? pageName : "upload";
+      pageSections.forEach((section) => {
+        section.hidden = section.dataset.page !== page;
+      });
+      pageLinks.forEach((link) => {
+        const isCurrent = link.dataset.pageLink === page;
+        if (isCurrent) {
+          link.setAttribute("aria-current", "page");
+        } else {
+          link.removeAttribute("aria-current");
+        }
+      });
+      pageSummaryEl.textContent = pages[page].summary;
+      document.title = `${pageLinksByName(page)} · Manual Library`;
+    }
+
+    function pageLinksByName(pageName) {
+      const link = Array.from(pageLinks).find((item) => item.dataset.pageLink === pageName);
+      return link ? link.textContent : "Manual Library";
+    }
+
+    function navigateToPage(pageName, { replace = false } = {}) {
+      const page = pages[pageName] ? pageName : "upload";
+      const targetPath = pages[page].path;
+      if (window.location.pathname !== targetPath) {
+        const method = replace ? "replaceState" : "pushState";
+        window.history[method]({ page }, "", targetPath);
+      }
+      showPage(page);
+    }
 
     function slugify(name) {
       return name
@@ -791,6 +902,17 @@
       renderLibrary(payload.library);
     }
 
+    pageLinks.forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateToPage(link.dataset.pageLink);
+      });
+    });
+
+    window.addEventListener("popstate", () => {
+      showPage(pageFromPath(window.location.pathname));
+    });
+
     libraryEl.addEventListener("change", (event) => {
       if (event.target instanceof Element && event.target.matches(".manual-select")) {
         updateLibraryActionButtons();
@@ -1034,6 +1156,7 @@
         uploadForm.reset();
         pendingQueryGameSelection = gameSlug;
         await loadLibrary();
+        navigateToPage("library");
       } catch (error) {
         setStatus(error.message, "error");
       } finally {
@@ -1047,6 +1170,9 @@
       deingestSelectedButton.disabled = true;
       queryGameSelect.innerHTML = '<option value="">Library unavailable</option>';
       queryGameSelect.disabled = true;
+    });
+    navigateToPage(pageFromPath(window.location.pathname), {
+      replace: window.location.pathname === "/",
     });
   </script>
 </body>
