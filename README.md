@@ -55,10 +55,10 @@ docker compose down
 
 ### Services
 
-| Service | URL |
-|---|---|
+| Service      | URL                    |
+| ------------ | ---------------------- |
 | Web UI / API | http://127.0.0.1:8000/ |
-| Qdrant | http://127.0.0.1:6333 |
+| Qdrant       | http://127.0.0.1:6333  |
 
 Compose runs Ollama internally at `http://ollama:11434` (not exposed on the host). It mounts `${HOME}/.ollama` so models you already pulled with the host `ollama` CLI are reused.
 
@@ -66,12 +66,14 @@ Compose runs Ollama internally at `http://ollama:11434` (not exposed on the host
 
 Defaults are set in `docker-compose.yaml`. Common overrides:
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `LLM_MODEL` | `llama3.2:latest` | Must match a model in `ollama list` |
-| `LLM_BASE_URL` | `http://ollama:11434/v1` | OpenAI-compatible chat API |
-| `QDRANT_COLLECTION` | `manual_chunks` | Vector collection name |
-| `RAG_TOP_K` | `10` | Number of chunks retrieved per query |
+| Variable              | Default                                                   | Purpose                                         |
+| --------------------- | --------------------------------------------------------- | ----------------------------------------------- |
+| `GEMINI_API_KEY`      | required                                                  | Google AI Studio API key used by Docker Compose |
+| `LLM_MODEL`           | `gemini-2.5-flash`                                        | OpenAI-compatible chat model                    |
+| `LLM_BASE_URL`        | `https://generativelanguage.googleapis.com/v1beta/openai` | OpenAI-compatible chat API                      |
+| `LLM_TIMEOUT_SECONDS` | `120`                                                     | LLM request timeout                             |
+| `QDRANT_COLLECTION`   | `manual_chunks`                                           | Vector collection name                          |
+| `RAG_TOP_K`           | `10`                                                      | Number of chunks retrieved per query            |
 
 If `LLM_BASE_URL` / `LLM_MODEL` are unset, `/query` falls back to returning retrieved excerpts (`answer_mode: "excerpt"`).
 

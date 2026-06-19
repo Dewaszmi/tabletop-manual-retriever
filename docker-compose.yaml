@@ -8,20 +8,20 @@ services:
       CHAT_DB_PATH: /app/data/chats.sqlite3
       QDRANT_URL: http://qdrant:6333
       RAG_TOP_K: 10
-      LLM_BASE_URL: http://ollama:11434/v1
-      LLM_MODEL: llama3.2:latest
-      LLM_API_KEY: ollama
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_MODEL: ${LLM_MODEL}
+      LLM_API_KEY: ${GEMINI_API_KEY}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS}
     volumes:
       - ./data:/app/data:z
     depends_on:
       qdrant:
         condition: service_healthy
-      ollama:
-        condition: service_started
     networks:
       - app
 
-  # currently running llms locally via ollama
+  # Optional local LLM fallback. Set LLM_BASE_URL=http://ollama:11434/v1,
+  # LLM_MODEL=<local model>, and LLM_API_KEY=ollama to use it.
   ollama:
     image: ollama/ollama:latest
     volumes:
