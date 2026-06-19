@@ -22,10 +22,15 @@ from tabletop_manual_retriever.ingest.service import (
 )
 from tabletop_manual_retriever.rag.llm import (
     AnswerGenerator,
+    ConversationMessage,
     LlmError,
     OpenAICompatibleAnswerGenerator,
+    build_conversation_context,
 )
 from tabletop_manual_retriever.storage.manuals import sanitize_pdf_filename, validate_game_slug
+
+SOURCE_EXCERPT_MAX_CHARS = 280
+MAX_HISTORY_MESSAGES = 12
 
 
 class RagDependencyError(IngestDependencyError):
@@ -45,6 +50,7 @@ class RagResult:
     context: str
     answer: str
     answer_mode: str
+    history: tuple[ConversationMessage, ...]
 
 
 @dataclass
@@ -70,6 +76,7 @@ class RagService:
         question: str,
         filename: str | None = None,
         top_k: int | None = None,
+        history: Sequence[ConversationMessage] | None = None,
     ) -> RagResult:
         slug = validate_game_slug(game_slug)
         normalized_question = question.strip()
@@ -80,11 +87,16 @@ class RagService:
             sanitize_pdf_filename(filename) if filename is not None else None
         )
         limit = top_k if top_k is not None else self.top_k
+        conversation_history = _normalize_history(history or ())
 
         assert self.embedder is not None
         assert self.vector_store is not None
 
-        query_vector = self.embedder.embed([normalized_question])[0]
+        retrieval_query = _build_retrieval_query(
+            question=normalized_question,
+            history=conversation_history,
+        )
+        query_vector = self.embedder.embed([retrieval_query])[0]
         sources = tuple(
             self.vector_store.search_chunks(
                 collection_name=self.collection_name,
@@ -94,12 +106,18 @@ class RagService:
                 limit=limit,
             )
         )
-        context = _build_context(sources)
+        context = _build_context(sources, history=conversation_history)
         answer, answer_mode = _build_answer(
             question=normalized_question,
             game_slug=slug,
             sources=sources,
             answer_generator=self.answer_generator,
+            history=conversation_history,
+        )
+        updated_history = _append_turn(
+            conversation_history,
+            question=normalized_question,
+            answer=answer,
         )
 
         return RagResult(
@@ -110,6 +128,7 @@ class RagService:
             context=context,
             answer=answer,
             answer_mode=answer_mode,
+            history=updated_history,
         )
 
 
@@ -124,10 +143,68 @@ def _default_answer_generator() -> AnswerGenerator | None:
     )
 
 
-def _build_context(sources: Sequence[RetrievedChunk]) -> str:
-    if not sources:
-        return ""
-    return "\n\n---\n\n".join(source.text for source in sources)
+def _normalize_history(
+    history: Sequence[ConversationMessage],
+) -> tuple[ConversationMessage, ...]:
+    normalized: list[ConversationMessage] = []
+    for message in history:
+        content = message.content.strip()
+        if not content or message.role not in {"user", "assistant"}:
+            continue
+        normalized.append(ConversationMessage(role=message.role, content=content))
+    return tuple(normalized[-MAX_HISTORY_MESSAGES:])
+
+
+def _append_turn(
+    history: Sequence[ConversationMessage],
+    *,
+    question: str,
+    answer: str,
+) -> tuple[ConversationMessage, ...]:
+    return (
+        *history,
+        ConversationMessage(role="user", content=question),
+        ConversationMessage(role="assistant", content=answer),
+    )[-MAX_HISTORY_MESSAGES:]
+
+
+def _build_retrieval_query(
+    *,
+    question: str,
+    history: Sequence[ConversationMessage],
+) -> str:
+    if not history:
+        return question
+    return (
+        f"Conversation history:\n{build_conversation_context(history)}\n\n"
+        f"Current question: {question}"
+    )
+
+
+def _build_context(
+    sources: Sequence[RetrievedChunk],
+    *,
+    history: Sequence[ConversationMessage] = (),
+) -> str:
+    source_context = "\n\n---\n\n".join(source.text for source in sources)
+    if not history:
+        return source_context
+    return (
+        f"Conversation history:\n{build_conversation_context(history)}\n\n"
+        f"Manual excerpts:\n{source_context}"
+    )
+
+
+def build_source_excerpt(
+    text: str,
+    max_chars: int = SOURCE_EXCERPT_MAX_CHARS,
+) -> str:
+    normalized = " ".join(text.split())
+    if len(normalized) <= max_chars:
+        return normalized
+
+    excerpt = normalized[:max_chars].rsplit(" ", 1)[0]
+    return f"{excerpt or normalized[:max_chars]}..."
 
 
 def _build_answer(
@@ -136,6 +213,7 @@ def _build_answer(
     game_slug: str,
     sources: Sequence[RetrievedChunk],
     answer_generator: AnswerGenerator | None,
+    history: Sequence[ConversationMessage] = (),
 ) -> tuple[str, str]:
     if not sources:
         return "No relevant manual passages were found for that question.", "none"
@@ -145,6 +223,7 @@ def _build_answer(
             question=question,
             game_slug=game_slug,
             sources=sources,
+            history=history,
         )
         return answer, "llm"
 

@@ -1,4 +1,5 @@
 from tabletop_manual_retriever.storage.manuals import (
+    delete_manual,
     list_games,
     list_library,
     list_manuals,
@@ -8,6 +9,7 @@ from tabletop_manual_retriever.storage.manuals import (
 )
 
 __all__ = [
+    "delete_manual",
     "list_games",
     "list_library",
     "list_manuals",

@@ -50,27 +50,73 @@
       padding: 2.5rem 1.25rem 4rem;
     }
 
-    header h1 {
+    .site-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1.25rem;
+    }
+
+    .site-header h1 {
       margin: 0 0 0.35rem;
       font-size: clamp(1.8rem, 4vw, 2.4rem);
       letter-spacing: -0.03em;
     }
 
-    header p {
+    .site-header p {
       margin: 0;
       color: var(--muted);
       max-width: 42rem;
       line-height: 1.5;
     }
 
-    .grid {
-      display: grid;
-      gap: 1.25rem;
+    .page-nav {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      flex: 0 0 auto;
+    }
+
+    .page-nav a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.35rem;
+      padding: 0.5rem 0.8rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--ink);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .page-nav a:hover {
+      background: rgba(109, 100, 88, 0.12);
+    }
+
+    .page-nav a[aria-current="page"] {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .page-shell {
       margin-top: 2rem;
     }
 
-    @media (min-width: 760px) {
-      .grid { grid-template-columns: 1fr 1.2fr; }
+    .page[hidden] {
+      display: none;
+    }
+
+    @media (max-width: 720px) {
+      .site-header {
+        display: block;
+      }
+
+      .page-nav {
+        justify-content: flex-start;
+        margin-top: 1rem;
+      }
     }
 
     .card {
@@ -96,7 +142,8 @@
     }
 
     input[type="text"],
-    input[type="file"] {
+    input[type="file"],
+    select {
       width: 100%;
       margin-bottom: 1rem;
       padding: 0.75rem 0.85rem;
@@ -106,6 +153,9 @@
       color: inherit;
       font: inherit;
     }
+
+    select { cursor: pointer; }
+    select:disabled { opacity: 0.65; cursor: not-allowed; }
 
     button {
       width: 100%;
@@ -121,6 +171,24 @@
 
     button:hover { background: var(--accent-hover); }
     button:disabled { opacity: 0.6; cursor: wait; }
+
+    .button-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--ink);
+    }
+
+    .button-secondary:hover {
+      background: rgba(109, 100, 88, 0.12);
+    }
+
+    .button-danger {
+      background: #b91c1c;
+    }
+
+    .button-danger:hover {
+      background: #991b1b;
+    }
 
     .hint {
       margin-top: 0.75rem;
@@ -162,9 +230,25 @@
       margin-top: 0;
     }
 
+    .game-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.65rem;
+    }
+
     .game h3 {
-      margin: 0 0 0.65rem;
+      margin: 0;
       font-size: 1.15rem;
+    }
+
+    .select-game-button {
+      width: auto;
+      flex: 0 0 auto;
+      padding: 0.45rem 0.7rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
     }
 
     .manual {
@@ -178,12 +262,137 @@
 
     .manual:first-of-type { border-top: 0; }
 
+    .manual-main {
+      display: flex;
+      gap: 0.65rem;
+      min-width: 0;
+    }
+
+    .manual-select {
+      width: 1rem;
+      height: 1rem;
+      flex: 0 0 auto;
+      margin-top: 0.15rem;
+    }
+
     .manual-name { font-weight: 600; }
 
     .manual-meta {
       color: var(--muted);
       text-align: right;
       white-space: nowrap;
+    }
+
+    .library-toolbar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .library-toolbar button {
+      width: auto;
+      flex: 1;
+      padding: 0.65rem 0.75rem;
+      font-size: 0.9rem;
+    }
+
+    .ask-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .ask-heading h2 {
+      margin: 0;
+    }
+
+    .clear-conversation-button {
+      width: auto;
+      flex: 0 0 auto;
+      padding: 0.55rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+
+    .ask-top-panel {
+      position: sticky;
+      top: 0.75rem;
+      z-index: 5;
+      display: grid;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      padding: 0.85rem 0 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .ask-game-field label {
+      margin-bottom: 0.35rem;
+    }
+
+    .ask-game-field select {
+      margin-bottom: 0;
+    }
+
+    .chat-history-panel {
+      clear: both;
+      margin: 0;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(109, 100, 88, 0.06);
+    }
+
+    .chat-history-panel summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .chat-list {
+      display: grid;
+      gap: 0.45rem;
+      max-height: 13rem;
+      margin-top: 0.75rem;
+      overflow: auto;
+    }
+
+    .chat-list-empty {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .chat-load-button {
+      width: 100%;
+      padding: 0.6rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+    }
+
+    .chat-load-button:hover,
+    .chat-load-button.active {
+      border-color: var(--accent);
+      background: rgba(154, 52, 18, 0.1);
+    }
+
+    .chat-title {
+      display: block;
+      font-weight: 800;
+    }
+
+    .chat-meta,
+    .chat-preview {
+      display: block;
+      margin-top: 0.2rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.35;
     }
 
     .manual-actions {
@@ -202,25 +411,42 @@
       font-size: 0.82rem;
     }
 
-    .ingest-status {
+    .manual-status {
       color: var(--muted);
       font-size: 0.82rem;
       white-space: nowrap;
     }
 
-    .ingest-status.success { color: var(--ok); }
-    .ingest-status.error { color: #b91c1c; }
+    .manual-status.success { color: var(--ok); }
+    .manual-status.error { color: #b91c1c; }
+    .manual-status.warning { color: #b45309; }
 
     .badge {
       display: inline-block;
       margin-left: 0.4rem;
       padding: 0.1rem 0.45rem;
       border-radius: 999px;
-      background: rgba(22, 101, 52, 0.12);
-      color: var(--ok);
+      background: rgba(109, 100, 88, 0.14);
+      color: var(--muted);
       font-size: 0.78rem;
       font-weight: 700;
       vertical-align: middle;
+    }
+
+    .badge.parsed,
+    .badge.indexed {
+      background: rgba(22, 101, 52, 0.12);
+      color: var(--ok);
+    }
+
+    .badge.not-indexed {
+      background: rgba(180, 83, 9, 0.12);
+      color: #b45309;
+    }
+
+    .badge.index-unknown {
+      background: rgba(109, 100, 88, 0.16);
+      color: var(--muted);
     }
 
     textarea {
@@ -238,6 +464,7 @@
 
     .query-result {
       margin-top: 1rem;
+      margin-bottom: 1.25rem;
       padding-top: 1rem;
       border-top: 1px solid var(--border);
     }
@@ -251,6 +478,65 @@
       white-space: pre-wrap;
       line-height: 1.5;
       margin: 0 0 1rem;
+    }
+
+    .conversation {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      padding-bottom: 0.25rem;
+    }
+
+    .message {
+      min-width: 0;
+      max-width: min(44rem, 100%);
+      padding: 0.85rem;
+      border-radius: 12px;
+      line-height: 1.5;
+      overflow-wrap: break-word;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+      border: 1px solid var(--border);
+      background: rgba(109, 100, 88, 0.08);
+    }
+
+    .message-role {
+      margin-bottom: 0.25rem;
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: inherit;
+      opacity: 0.72;
+    }
+
+    .message-content {
+      white-space: pre-wrap;
+    }
+
+    .query-sources {
+      margin-top: 1rem;
+      margin-bottom: 0.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .query-sources > summary,
+    .source-full > summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .query-sources > summary {
+      margin-bottom: 0.75rem;
     }
 
     .source {
@@ -267,17 +553,42 @@
       font-size: 0.85rem;
       margin-bottom: 0.35rem;
     }
+
+    .source-excerpt {
+      margin: 0;
+    }
+
+    .source-full {
+      margin-top: 0.5rem;
+    }
+
+    .source-full-text {
+      max-height: 12rem;
+      overflow: auto;
+      margin: 0.5rem 0 0;
+      padding: 0.75rem;
+      border-left: 3px solid var(--border);
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
   <main>
-    <header>
-      <h1>Manual Library</h1>
-      <p>Upload one or more rulebook PDFs for a board game. Files are saved under <code>data/uploads/&lt;game&gt;/</code> and parsed automatically into JSON beside each PDF.</p>
+    <header class="site-header">
+      <div>
+        <h1>Manual Library</h1>
+        <p id="page-summary">Upload one or more rulebook PDFs for a board game.</p>
+      </div>
+      <nav class="page-nav" aria-label="Primary">
+        <a href="/upload" data-page-link="upload">Upload</a>
+        <a href="/library" data-page-link="library">Library</a>
+        <a href="/ask" data-page-link="ask">Ask</a>
+      </nav>
     </header>
 
-    <div class="grid">
-      <section class="card">
+    <div class="page-shell">
+      <section class="card page" data-page="upload">
         <h2>Add to library</h2>
         <form id="upload-form">
           <label for="game-name">Board game</label>
@@ -296,27 +607,46 @@
         <div id="status" class="status" aria-live="polite"></div>
       </section>
 
-      <section class="card">
+      <section class="card page" data-page="library" hidden>
         <h2>Library</h2>
+        <div class="library-toolbar">
+          <button type="button" id="ingest-selected-button" disabled>Ingest selected</button>
+          <button type="button" id="deingest-selected-button" class="button-secondary" disabled>Deingest selected</button>
+        </div>
         <div id="library">
           <p class="library-empty">Loading…</p>
         </div>
+        <div id="library-status" class="status" aria-live="polite"></div>
       </section>
 
-      <section class="card">
-        <h2>Ask the rules</h2>
+      <section class="card page" data-page="ask" hidden>
+        <div class="ask-heading">
+          <h2>Ask the rules</h2>
+          <button type="button" id="clear-conversation-button" class="clear-conversation-button button-secondary" disabled>New conversation</button>
+        </div>
+        <div class="ask-top-panel">
+          <div class="ask-game-field">
+            <label for="query-game">Board game</label>
+            <select id="query-game" name="game_slug" required>
+              <option value="">Loading library...</option>
+            </select>
+          </div>
+          <details class="chat-history-panel" open>
+            <summary>Previous chats</summary>
+            <div id="chat-list" class="chat-list">
+              <p class="chat-list-empty">Loading chats...</p>
+            </div>
+          </details>
+        </div>
+        <div id="query-result" hidden></div>
         <form id="query-form">
-          <label for="query-game">Board game</label>
-          <input id="query-game" name="game_slug" type="text" placeholder="e.g. catan" required>
-
           <label for="query-question">Question</label>
           <textarea id="query-question" name="question" placeholder="How do I win?" required></textarea>
 
-          <button type="submit" id="query-button">Search manuals</button>
+          <button type="submit" id="query-button">Ask</button>
         </form>
-        <p class="hint">Ingest manuals first so their chunks are available in Qdrant.</p>
+        <p class="hint">Select manuals in the library and ingest them before asking questions.</p>
         <div id="query-status" class="status" aria-live="polite"></div>
-        <div id="query-result" hidden></div>
       </section>
     </div>
   </main>
@@ -325,12 +655,82 @@
     const uploadForm = document.getElementById("upload-form");
     const uploadButton = document.getElementById("upload-button");
     const statusEl = document.getElementById("status");
+    const pageSummaryEl = document.getElementById("page-summary");
+    const pageSections = document.querySelectorAll("[data-page]");
+    const pageLinks = document.querySelectorAll("[data-page-link]");
     const libraryEl = document.getElementById("library");
+    const libraryStatusEl = document.getElementById("library-status");
+    const ingestSelectedButton = document.getElementById("ingest-selected-button");
+    const deingestSelectedButton = document.getElementById("deingest-selected-button");
     const queryForm = document.getElementById("query-form");
+    const queryGameSelect = document.getElementById("query-game");
     const queryButton = document.getElementById("query-button");
+    const clearConversationButton = document.getElementById("clear-conversation-button");
     const queryStatusEl = document.getElementById("query-status");
     const queryResultEl = document.getElementById("query-result");
+    const chatListEl = document.getElementById("chat-list");
     let currentLibrary = [];
+    let pendingQueryGameSelection = "";
+    let activeConversationId = "";
+    let conversationGameSlug = "";
+    let conversationHistory = [];
+    let conversationTranscript = [];
+    let savedChats = [];
+
+    const pages = {
+      upload: {
+        path: "/upload",
+        summary: "Upload one or more rulebook PDFs for a board game.",
+      },
+      library: {
+        path: "/library",
+        summary: "Review uploaded manuals, select documents, and manage Qdrant indexing.",
+      },
+      ask: {
+        path: "/ask",
+        summary: "Choose an indexed game manual and ask a rules question.",
+      },
+    };
+
+    function pageFromPath(pathname) {
+      const normalizedPath = pathname.replace(/\/+$/, "") || "/";
+      if (normalizedPath === "/") {
+        return "upload";
+      }
+      return Object.entries(pages).find(([, page]) => page.path === normalizedPath)?.[0] || "upload";
+    }
+
+    function showPage(pageName) {
+      const page = pages[pageName] ? pageName : "upload";
+      pageSections.forEach((section) => {
+        section.hidden = section.dataset.page !== page;
+      });
+      pageLinks.forEach((link) => {
+        const isCurrent = link.dataset.pageLink === page;
+        if (isCurrent) {
+          link.setAttribute("aria-current", "page");
+        } else {
+          link.removeAttribute("aria-current");
+        }
+      });
+      pageSummaryEl.textContent = pages[page].summary;
+      document.title = `${pageLinksByName(page)} · Manual Library`;
+    }
+
+    function pageLinksByName(pageName) {
+      const link = Array.from(pageLinks).find((item) => item.dataset.pageLink === pageName);
+      return link ? link.textContent : "Manual Library";
+    }
+
+    function navigateToPage(pageName, { replace = false } = {}) {
+      const page = pages[pageName] ? pageName : "upload";
+      const targetPath = pages[page].path;
+      if (window.location.pathname !== targetPath) {
+        const method = replace ? "replaceState" : "pushState";
+        window.history[method]({ page }, "", targetPath);
+      }
+      showPage(page);
+    }
 
     function slugify(name) {
       return name
@@ -346,6 +746,18 @@
       return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
+    function renderIndexBadge(manual) {
+      if (manual.index_status === "unknown" || manual.indexed == null) {
+        return '<span class="badge index-unknown">Index unknown</span>';
+      }
+      if (manual.indexed) {
+        const pointCount = manual.indexed_point_count || 0;
+        const chunkLabel = `${pointCount} indexed chunk${pointCount === 1 ? "" : "s"}`;
+        return `<span class="badge indexed" title="${chunkLabel}">Indexed</span>`;
+      }
+      return '<span class="badge not-indexed">Not indexed</span>';
+    }
+
     function setStatus(message, type = "") {
       statusEl.textContent = message;
       statusEl.className = `status${type ? ` ${type}` : ""}`;
@@ -356,24 +768,234 @@
       queryStatusEl.className = `status${type ? ` ${type}` : ""}`;
     }
 
-    function renderQueryResult(payload) {
-      const sources = (payload.sources || []).map((source) => `
-        <article class="source">
-          <div class="source-meta">
-            ${source.filename} · page ${source.page_number} · score ${source.score.toFixed(3)}
-          </div>
-          <div>${source.text}</div>
-        </article>
-      `).join("");
+    function setLibraryStatus(message, type = "") {
+      libraryStatusEl.textContent = message;
+      libraryStatusEl.className = `status${type ? ` ${type}` : ""}`;
+    }
 
-      queryResultEl.innerHTML = `
-        <div class="query-result">
-          <h3>Answer</h3>
-          <p class="query-answer">${payload.answer || "No answer returned."}</p>
-          ${sources ? `<h3>Sources</h3>${sources}` : ""}
-        </div>
-      `;
+    function appendTextElement(parent, tagName, className, text) {
+      const element = document.createElement(tagName);
+      if (className) {
+        element.className = className;
+      }
+      element.textContent = text;
+      parent.appendChild(element);
+      return element;
+    }
+
+    function formatScore(score) {
+      return Number.isFinite(score) ? score.toFixed(3) : "n/a";
+    }
+
+    function formatChatDate(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return "";
+      }
+      return date.toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    function truncateText(text, maxLength = 120) {
+      const normalized = (text || "").replace(/\s+/g, " ").trim();
+      if (normalized.length <= maxLength) {
+        return normalized;
+      }
+      return `${normalized.slice(0, maxLength).trim()}...`;
+    }
+
+    function updateQueryGameSelectState() {
+      queryGameSelect.disabled = !currentLibrary.length || conversationTranscript.length > 0;
+    }
+
+    function updateActiveChatButton() {
+      chatListEl.querySelectorAll(".chat-load-button").forEach((button) => {
+        button.classList.toggle(
+          "active",
+          button.dataset.conversationId === activeConversationId
+        );
+      });
+    }
+
+    function renderChatList(chats) {
+      chatListEl.replaceChildren();
+      if (!chats.length) {
+        appendTextElement(
+          chatListEl,
+          "p",
+          "chat-list-empty",
+          "No saved chats yet."
+        );
+        return;
+      }
+
+      for (const chat of chats) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "chat-load-button";
+        button.dataset.conversationId = chat.id;
+        appendTextElement(button, "span", "chat-title", chat.title || "Conversation");
+        appendTextElement(
+          button,
+          "span",
+          "chat-meta",
+          `${chat.game_slug} · ${formatChatDate(chat.updated_at)}`
+        );
+        if (chat.last_message) {
+          appendTextElement(
+            button,
+            "span",
+            "chat-preview",
+            truncateText(chat.last_message)
+          );
+        }
+        chatListEl.appendChild(button);
+      }
+      updateActiveChatButton();
+    }
+
+    function createSourceDetails(sources) {
+      if (!sources.length) {
+        return null;
+      }
+
+      const sourceDetails = document.createElement("details");
+      sourceDetails.className = "query-sources";
+      appendTextElement(
+        sourceDetails,
+        "summary",
+        "",
+        `Sources (${sources.length})`
+      );
+
+      for (const source of sources) {
+        const article = document.createElement("article");
+        article.className = "source";
+
+        appendTextElement(
+          article,
+          "div",
+          "source-meta",
+          `${source.filename} · page ${source.page_number} · score ${formatScore(source.score)}`
+        );
+        appendTextElement(article, "p", "source-excerpt", source.excerpt || "");
+
+        const fullSource = document.createElement("details");
+        fullSource.className = "source-full";
+        appendTextElement(fullSource, "summary", "", "Show full passage");
+        appendTextElement(fullSource, "p", "source-full-text", source.text || "");
+        article.appendChild(fullSource);
+
+        sourceDetails.appendChild(article);
+      }
+
+      return sourceDetails;
+    }
+
+    function renderConversation() {
+      queryResultEl.replaceChildren();
+      if (!conversationTranscript.length) {
+        queryResultEl.hidden = true;
+        clearConversationButton.disabled = true;
+        updateQueryGameSelectState();
+        updateActiveChatButton();
+        return;
+      }
+
+      const conversation = document.createElement("div");
+      conversation.className = "query-result conversation";
+
+      for (const message of conversationTranscript) {
+        const article = document.createElement("article");
+        article.className = `message ${message.role}`;
+        appendTextElement(
+          article,
+          "div",
+          "message-role",
+          message.role === "user" ? "You" : "Assistant"
+        );
+        appendTextElement(article, "div", "message-content", message.content);
+
+        if (message.role === "assistant" && message.sources?.length) {
+          const sourceDetails = createSourceDetails(message.sources);
+          if (sourceDetails) {
+            article.appendChild(sourceDetails);
+          }
+        }
+
+        conversation.appendChild(article);
+      }
+
+      queryResultEl.replaceChildren(conversation);
       queryResultEl.hidden = false;
+      clearConversationButton.disabled = false;
+      updateQueryGameSelectState();
+      updateActiveChatButton();
+    }
+
+    function resetConversation() {
+      activeConversationId = "";
+      conversationHistory = [];
+      conversationTranscript = [];
+      conversationGameSlug = queryGameSelect.value;
+      setQueryStatus("");
+      renderConversation();
+      updateActiveChatButton();
+    }
+
+    function setQueryGameSelection(gameSlug) {
+      if (!gameSlug) {
+        return;
+      }
+      const hasOption = Array.from(queryGameSelect.options)
+        .some((option) => option.value === gameSlug);
+      if (!hasOption) {
+        const option = document.createElement("option");
+        option.value = gameSlug;
+        option.textContent = gameSlug;
+        queryGameSelect.appendChild(option);
+      }
+      queryGameSelect.value = gameSlug;
+    }
+
+    async function loadChats() {
+      try {
+        const payload = await requestJson("/chats");
+        savedChats = payload.chats || [];
+        renderChatList(savedChats);
+      } catch (error) {
+        chatListEl.replaceChildren();
+        appendTextElement(
+          chatListEl,
+          "p",
+          "chat-list-empty",
+          error.message
+        );
+      }
+    }
+
+    async function loadConversation(conversationId) {
+      setQueryStatus("Loading conversation...");
+      const payload = await requestJson(`/chats/${encodeURIComponent(conversationId)}`);
+      activeConversationId = payload.id;
+      conversationGameSlug = payload.game_slug;
+      setQueryGameSelection(payload.game_slug);
+      conversationHistory = (payload.messages || []).map((message) => ({
+        role: message.role,
+        content: message.content,
+      }));
+      conversationTranscript = (payload.messages || []).map((message) => ({
+        role: message.role,
+        content: message.content,
+        sources: message.sources || [],
+      }));
+      renderConversation();
+      navigateToPage("ask");
+      setQueryStatus(`Loaded ${payload.title}.`, "success");
     }
 
     function sanitizeFilename(filename) {
@@ -408,33 +1030,166 @@
       return { message, type: replaced.length ? "warning" : "success" };
     }
 
+    async function requestJson(url, options = {}) {
+      const response = await fetch(url, options);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.detail || "Request failed");
+      }
+      return payload;
+    }
+
+    function selectedManuals() {
+      return Array.from(libraryEl.querySelectorAll(".manual-select:checked"))
+        .map((input) => ({
+          gameSlug: input.dataset.gameSlug,
+          filename: input.dataset.filename,
+        }))
+        .filter((manual) => manual.gameSlug && manual.filename);
+    }
+
+    function manualCheckboxesForGame(gameSlug) {
+      return Array.from(
+        libraryEl.querySelectorAll(
+          `.manual-select[data-game-slug="${CSS.escape(gameSlug)}"]`
+        )
+      );
+    }
+
+    function updateGameSelectButtons() {
+      libraryEl.querySelectorAll(".select-game-button").forEach((button) => {
+        const gameSlug = button.dataset.gameSlug || "";
+        const checkboxes = manualCheckboxesForGame(gameSlug);
+        const allSelected = checkboxes.length > 0 && checkboxes.every((input) => input.checked);
+        button.textContent = allSelected ? "Clear" : "Select all";
+        button.setAttribute("aria-pressed", String(allSelected));
+      });
+    }
+
+    function updateLibraryActionButtons() {
+      const hasSelection = selectedManuals().length > 0;
+      ingestSelectedButton.disabled = !hasSelection;
+      deingestSelectedButton.disabled = !hasSelection;
+      updateGameSelectButtons();
+    }
+
+    function setLibraryBusy(isBusy) {
+      libraryEl.querySelectorAll("button, input").forEach((control) => {
+        control.disabled = isBusy;
+      });
+      ingestSelectedButton.disabled = isBusy || !selectedManuals().length;
+      deingestSelectedButton.disabled = isBusy || !selectedManuals().length;
+    }
+
+    function manualStatusElement(gameSlug, filename) {
+      return libraryEl.querySelector(
+        `.manual-status[data-game-slug="${CSS.escape(gameSlug)}"][data-filename="${CSS.escape(filename)}"]`
+      );
+    }
+
+    function setManualStatus(manual, message, type = "") {
+      const status = manualStatusElement(manual.gameSlug, manual.filename);
+      if (!status) {
+        return;
+      }
+      status.textContent = message;
+      status.className = `manual-status${type ? ` ${type}` : ""}`;
+    }
+
+    async function ingestManual(manual) {
+      return requestJson("/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          game_slug: manual.gameSlug,
+          filename: manual.filename,
+        }),
+      });
+    }
+
+    async function deingestManual(manual) {
+      return requestJson("/ingest", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          game_slug: manual.gameSlug,
+          filename: manual.filename,
+        }),
+      });
+    }
+
+    async function deleteUploadedManual(manual) {
+      return requestJson(
+        `/games/${encodeURIComponent(manual.gameSlug)}/manuals/${encodeURIComponent(manual.filename)}`,
+        { method: "DELETE" }
+      );
+    }
+
+    function renderQueryGameOptions(library) {
+      const previousSelection = pendingQueryGameSelection || queryGameSelect.value;
+      pendingQueryGameSelection = "";
+
+      if (!library.length) {
+        queryGameSelect.innerHTML = '<option value="">Upload a manual first</option>';
+        updateQueryGameSelectState();
+        return;
+      }
+
+      queryGameSelect.innerHTML = library.map((game) => {
+        const countLabel = `${game.manuals.length} manual${game.manuals.length === 1 ? "" : "s"}`;
+        return `<option value="${game.game_slug}">${game.game_slug} (${countLabel})</option>`;
+      }).join("");
+
+      if (library.some((game) => game.game_slug === previousSelection)) {
+        queryGameSelect.value = previousSelection;
+      }
+      updateQueryGameSelectState();
+    }
+
     function renderLibrary(library) {
       currentLibrary = library;
+      renderQueryGameOptions(library);
 
       if (!library.length) {
         libraryEl.innerHTML = '<p class="library-empty">No manuals yet. Upload your first rulebook.</p>';
+        updateLibraryActionButtons();
         return;
       }
 
       libraryEl.innerHTML = library.map((game) => {
         const manuals = game.manuals.map((manual) => `
           <div class="manual">
-            <div>
-              <div class="manual-name">${manual.filename}</div>
-              <div class="manual-meta">${manual.parsed_path || ""}</div>
+            <div class="manual-main">
+              <input
+                type="checkbox"
+                class="manual-select"
+                aria-label="Select ${manual.filename}"
+                data-game-slug="${game.game_slug}"
+                data-filename="${manual.filename}"
+              >
+              <div>
+                <div class="manual-name">${manual.filename}</div>
+                <div class="manual-meta">${manual.parsed_path || ""}</div>
+              </div>
             </div>
             <div class="manual-meta">
               ${manual.page_count != null ? `${manual.page_count} pages` : ""}
-              ${manual.parsed ? '<span class="badge">parsed</span>' : ""}
+              ${manual.parsed ? '<span class="badge parsed">parsed</span>' : ""}
+              ${renderIndexBadge(manual)}
               <div>${formatBytes(manual.size_bytes)}</div>
               <div class="manual-actions">
-                <span class="ingest-status" aria-live="polite"></span>
-                <button
-                  type="button"
-                  class="ingest-button"
+                <span
+                  class="manual-status"
+                  aria-live="polite"
                   data-game-slug="${game.game_slug}"
                   data-filename="${manual.filename}"
-                >Ingest</button>
+                ></span>
+                <button
+                  type="button"
+                  class="remove-manual-button button-danger"
+                  data-game-slug="${game.game_slug}"
+                  data-filename="${manual.filename}"
+                >Remove</button>
               </div>
             </div>
           </div>
@@ -444,11 +1199,19 @@
 
         return `
           <article class="game">
-            <h3>${game.game_slug} <span class="game-count">(${countLabel})</span></h3>
+            <div class="game-heading">
+              <h3>${game.game_slug} <span class="game-count">(${countLabel})</span></h3>
+              <button
+                type="button"
+                class="select-game-button button-secondary"
+                data-game-slug="${game.game_slug}"
+              >Select all</button>
+            </div>
             ${manuals}
           </article>
         `;
       }).join("");
+      updateLibraryActionButtons();
     }
 
     async function loadLibrary() {
@@ -460,54 +1223,179 @@
       renderLibrary(payload.library);
     }
 
-    libraryEl.addEventListener("click", async (event) => {
+    pageLinks.forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigateToPage(link.dataset.pageLink);
+      });
+    });
+
+    window.addEventListener("popstate", () => {
+      showPage(pageFromPath(window.location.pathname));
+    });
+
+    queryGameSelect.addEventListener("change", () => {
+      resetConversation();
+    });
+
+    clearConversationButton.addEventListener("click", () => {
+      resetConversation();
+    });
+
+    chatListEl.addEventListener("click", async (event) => {
       const button = event.target instanceof Element
-        ? event.target.closest(".ingest-button")
+        ? event.target.closest(".chat-load-button")
+        : null;
+      if (!button?.dataset.conversationId) {
+        return;
+      }
+
+      try {
+        await loadConversation(button.dataset.conversationId);
+      } catch (error) {
+        setQueryStatus(error.message, "error");
+      }
+    });
+
+    libraryEl.addEventListener("change", (event) => {
+      if (event.target instanceof Element && event.target.matches(".manual-select")) {
+        updateLibraryActionButtons();
+      }
+    });
+
+    libraryEl.addEventListener("click", async (event) => {
+      const selectGameButton = event.target instanceof Element
+        ? event.target.closest(".select-game-button")
+        : null;
+      if (selectGameButton) {
+        const gameSlug = selectGameButton.dataset.gameSlug;
+        if (!gameSlug) {
+          return;
+        }
+
+        const checkboxes = manualCheckboxesForGame(gameSlug);
+        const shouldSelect = checkboxes.some((checkbox) => !checkbox.checked);
+        checkboxes.forEach((checkbox) => {
+          checkbox.checked = shouldSelect;
+        });
+        updateLibraryActionButtons();
+        return;
+      }
+
+      const button = event.target instanceof Element
+        ? event.target.closest(".remove-manual-button")
         : null;
       if (!button) {
         return;
       }
 
-      const status = button.parentElement.querySelector(".ingest-status");
-      let completed = false;
-      button.disabled = true;
-      status.textContent = "Indexing…";
-      status.className = "ingest-status";
+      const manual = {
+        gameSlug: button.dataset.gameSlug,
+        filename: button.dataset.filename,
+      };
+      if (!manual.gameSlug || !manual.filename) {
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Remove ${manual.filename} from ${manual.gameSlug}? This will also remove its indexed chunks.`
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      setLibraryBusy(true);
+      setManualStatus(manual, "Removing...");
+      setLibraryStatus(`Removing ${manual.filename}...`);
 
       try {
-        const response = await fetch("/ingest", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            game_slug: button.dataset.gameSlug,
-            filename: button.dataset.filename,
-          }),
-        });
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(payload.detail || "Ingest failed");
-        }
-
-        status.textContent = `Indexed ${payload.total_chunks} chunks`;
-        status.className = "ingest-status success";
-        button.textContent = "Indexed";
-        completed = true;
+        await deingestManual(manual);
+        await deleteUploadedManual(manual);
+        setLibraryStatus(`Removed ${manual.filename}.`, "success");
+        await loadLibrary();
       } catch (error) {
-        status.textContent = error.message;
-        status.className = "ingest-status error";
+        setManualStatus(manual, error.message, "error");
+        setLibraryStatus(error.message, "error");
       } finally {
-        button.disabled = completed;
+        setLibraryBusy(false);
+        updateLibraryActionButtons();
+      }
+    });
+
+    ingestSelectedButton.addEventListener("click", async () => {
+      const manuals = selectedManuals();
+      if (!manuals.length) {
+        setLibraryStatus("Choose at least one manual.", "warning");
+        return;
+      }
+
+      setLibraryBusy(true);
+      setLibraryStatus(`Indexing ${manuals.length} manual${manuals.length === 1 ? "" : "s"}...`);
+
+      let totalChunks = 0;
+      let activeManual = null;
+      try {
+        for (const manual of manuals) {
+          activeManual = manual;
+          setManualStatus(manual, "Indexing...");
+          const payload = await ingestManual(manual);
+          totalChunks += payload.total_chunks || 0;
+          setManualStatus(manual, `Indexed ${payload.total_chunks} chunks`, "success");
+          queryGameSelect.value = manual.gameSlug;
+        }
+        setLibraryStatus(`Indexed ${totalChunks} chunks.`, "success");
+        await loadLibrary();
+      } catch (error) {
+        if (activeManual) {
+          setManualStatus(activeManual, error.message, "error");
+        }
+        setLibraryStatus(error.message, "error");
+      } finally {
+        setLibraryBusy(false);
+        updateLibraryActionButtons();
+      }
+    });
+
+    deingestSelectedButton.addEventListener("click", async () => {
+      const manuals = selectedManuals();
+      if (!manuals.length) {
+        setLibraryStatus("Choose at least one manual.", "warning");
+        return;
+      }
+
+      setLibraryBusy(true);
+      setLibraryStatus(`Removing indexed chunks for ${manuals.length} manual${manuals.length === 1 ? "" : "s"}...`);
+
+      let totalPoints = 0;
+      let activeManual = null;
+      try {
+        for (const manual of manuals) {
+          activeManual = manual;
+          setManualStatus(manual, "Deingesting...");
+          const payload = await deingestManual(manual);
+          totalPoints += payload.total_points || 0;
+          setManualStatus(manual, `Removed ${payload.total_points} chunks`, "success");
+        }
+        setLibraryStatus(`Removed ${totalPoints} indexed chunks.`, "success");
+        await loadLibrary();
+      } catch (error) {
+        if (activeManual) {
+          setManualStatus(activeManual, error.message, "error");
+        }
+        setLibraryStatus(error.message, "error");
+      } finally {
+        setLibraryBusy(false);
+        updateLibraryActionButtons();
       }
     });
 
     queryForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const gameSlug = slugify(document.getElementById("query-game").value);
+      const gameSlug = queryGameSelect.value;
       const question = document.getElementById("query-question").value.trim();
 
       if (!gameSlug) {
-        setQueryStatus("Enter a valid board game slug.", "error");
+        setQueryStatus("Choose a board game from the library.", "error");
         return;
       }
 
@@ -517,17 +1405,28 @@
       }
 
       queryButton.disabled = true;
-      queryResultEl.hidden = true;
+      queryGameSelect.disabled = true;
+      if (conversationGameSlug && conversationGameSlug !== gameSlug) {
+        resetConversation();
+      }
+      conversationGameSlug = gameSlug;
       setQueryStatus("Searching manuals…");
 
       try {
+        const queryPayload = {
+          game_slug: gameSlug,
+          question,
+        };
+        if (activeConversationId) {
+          queryPayload.conversation_id = activeConversationId;
+        } else {
+          queryPayload.history = conversationHistory;
+        }
+
         const response = await fetch("/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            game_slug: gameSlug,
-            question,
-          }),
+          body: JSON.stringify(queryPayload),
         });
         const payload = await response.json();
 
@@ -535,17 +1434,35 @@
           throw new Error(payload.detail || "Query failed");
         }
 
-        renderQueryResult(payload);
+        activeConversationId = payload.conversation_id || activeConversationId;
+        const sources = payload.sources || [];
+        conversationTranscript.push(
+          { role: "user", content: question },
+          {
+            role: "assistant",
+            content: payload.answer || "No answer returned.",
+            sources,
+          }
+        );
+        conversationHistory = payload.history || [
+          ...conversationHistory,
+          { role: "user", content: question },
+          { role: "assistant", content: payload.answer || "" },
+        ];
+        document.getElementById("query-question").value = "";
+        renderConversation();
+        await loadChats();
         setQueryStatus(
-          payload.sources.length
-            ? `Found ${payload.sources.length} relevant passage${payload.sources.length === 1 ? "" : "s"}.`
+          sources.length
+            ? `Found ${sources.length} relevant passage${sources.length === 1 ? "" : "s"}.`
             : "No relevant passages found.",
-          payload.sources.length ? "success" : "warning"
+          sources.length ? "success" : "warning"
         );
       } catch (error) {
         setQueryStatus(error.message, "error");
       } finally {
         queryButton.disabled = false;
+        updateQueryGameSelectState();
       }
     });
 
@@ -610,7 +1527,9 @@
         const summary = formatUploadSummary(payload);
         setStatus(summary.message, summary.type);
         uploadForm.reset();
+        pendingQueryGameSelection = gameSlug;
         await loadLibrary();
+        navigateToPage("library");
       } catch (error) {
         setStatus(error.message, "error");
       } finally {
@@ -620,6 +1539,14 @@
 
     loadLibrary().catch(() => {
       libraryEl.innerHTML = '<p class="library-empty">Could not load the library.</p>';
+      ingestSelectedButton.disabled = true;
+      deingestSelectedButton.disabled = true;
+      queryGameSelect.innerHTML = '<option value="">Library unavailable</option>';
+      queryGameSelect.disabled = true;
+    });
+    loadChats();
+    navigateToPage(pageFromPath(window.location.pathname), {
+      replace: window.location.pathname === "/",
     });
   </script>
 </body>

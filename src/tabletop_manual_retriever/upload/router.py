@@ -1,10 +1,18 @@
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from tabletop_manual_retriever.config import PROJECT_ROOT
 from tabletop_manual_retriever.ingest import save_parsed_manual
+from tabletop_manual_retriever.ingest.router import get_ingest_service
+from tabletop_manual_retriever.ingest.service import (
+    IngestDependencyError,
+    IngestService,
+    IngestStoreError,
+)
 from tabletop_manual_retriever.storage import (
+    delete_manual,
     list_games,
     list_library,
     list_manuals,
@@ -65,14 +73,46 @@ async def _process_manual_upload(
     }
 
 
+def _add_index_metadata(
+    library: list[dict],
+    service: IngestService,
+) -> list[dict]:
+    index_lookup_available = True
+    for game in library:
+        game_slug = game["game_slug"]
+        for manual in game["manuals"]:
+            if not index_lookup_available:
+                manual["indexed"] = None
+                manual["indexed_point_count"] = None
+                manual["index_status"] = "unknown"
+                continue
+
+            try:
+                point_count = service.count_manual_chunks(game_slug, manual["filename"])
+            except (IngestDependencyError, IngestStoreError):
+                index_lookup_available = False
+                manual["indexed"] = None
+                manual["indexed_point_count"] = None
+                manual["index_status"] = "unknown"
+                continue
+
+            manual["indexed"] = point_count > 0
+            manual["indexed_point_count"] = point_count
+            manual["index_status"] = "indexed" if point_count > 0 else "not_indexed"
+    return library
+
+
 @router.get("")
 async def list_games_endpoint() -> dict:
     return {"games": list_games()}
 
 
 @router.get("/library")
-async def list_library_endpoint() -> dict:
-    return {"library": list_library()}
+async def list_library_endpoint(
+    service: Annotated[IngestService, Depends(get_ingest_service)],
+) -> dict:
+    library = _add_index_metadata(list_library(), service)
+    return {"library": library}
 
 
 @router.get("/{game_slug}/manuals")
@@ -146,3 +186,23 @@ async def upload_manual_endpoint(
         return {"game_slug": slug, **results[0]}
 
     return {"game_slug": slug, "uploads": results}
+
+
+@router.delete("/{game_slug}/manuals/{filename}")
+async def delete_manual_endpoint(game_slug: str, filename: str) -> dict:
+    try:
+        slug = validate_game_slug(game_slug)
+        pdf_path, parsed_path = delete_manual(slug, filename)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "game_slug": slug,
+        "filename": pdf_path.name,
+        "deleted": True,
+        "path": _relative_upload_path(pdf_path),
+        "parsed_path": _relative_upload_path(parsed_path) if parsed_path else None,
+        "parsed_deleted": parsed_path is not None,
+    }

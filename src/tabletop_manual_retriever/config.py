@@ -3,8 +3,16 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+DATA_DIR = Path(
+    os.environ.get("DATA_DIR", PROJECT_ROOT / "data")
+).resolve()
+
 UPLOADS_DIR = Path(
-    os.environ.get("UPLOADS_DIR", PROJECT_ROOT / "data" / "uploads")
+    os.environ.get("UPLOADS_DIR", DATA_DIR / "uploads")
+).resolve()
+
+CHAT_DB_PATH = Path(
+    os.environ.get("CHAT_DB_PATH", DATA_DIR / "chats.sqlite3")
 ).resolve()
 
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")

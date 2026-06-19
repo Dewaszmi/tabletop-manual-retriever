@@ -5,6 +5,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tabletop_manual_retriever.main import app
+from tabletop_manual_retriever.upload.router import _add_index_metadata
+
+
+class FakeIndexService:
+    def __init__(self, counts: dict[tuple[str, str], int]) -> None:
+        self.counts = counts
+
+    def count_manual_chunks(self, game_slug: str, filename: str) -> int:
+        return self.counts[(game_slug, filename)]
 
 
 def _make_sample_pdf(path: Path) -> None:
@@ -142,6 +151,24 @@ def test_upload_manual_endpoint_can_overwrite_existing_manual(
     assert response.json()["overwritten"] is True
 
 
+def test_delete_manual_endpoint_removes_pdf_and_parsed_json(
+    uploads_dir: Path,
+) -> None:
+    client = TestClient(app)
+    game_dir = uploads_dir / "catan"
+    game_dir.mkdir()
+    (game_dir / "rules.pdf").write_bytes(b"%PDF-1.4")
+    (game_dir / "rules.json").write_text("{}", encoding="utf-8")
+
+    response = client.delete("/games/catan/manuals/rules.pdf")
+
+    assert response.status_code == 200
+    assert response.json()["deleted"] is True
+    assert response.json()["parsed_deleted"] is True
+    assert not (game_dir / "rules.pdf").exists()
+    assert not (game_dir / "rules.json").exists()
+
+
 def test_list_games_and_manuals_endpoints(uploads_dir: Path) -> None:
     client = TestClient(app)
     (uploads_dir / "catan").mkdir()
@@ -193,6 +220,35 @@ def test_library_endpoint_returns_manual_metadata(uploads_dir: Path) -> None:
     assert library[0]["manuals"][0]["parsed"] is True
     assert library[0]["manuals"][0]["page_count"] == 2
     assert library[0]["manuals"][0]["block_count"] == 2
+
+
+def test_add_index_metadata_marks_indexed_manuals() -> None:
+    library = [
+        {
+            "game_slug": "catan",
+            "manuals": [
+                {"filename": "rules.pdf"},
+                {"filename": "expansion.pdf"},
+            ],
+        }
+    ]
+
+    result = _add_index_metadata(
+        library,
+        FakeIndexService(
+            {
+                ("catan", "rules.pdf"): 4,
+                ("catan", "expansion.pdf"): 0,
+            }
+        ),
+    )
+
+    assert result[0]["manuals"][0]["indexed"] is True
+    assert result[0]["manuals"][0]["indexed_point_count"] == 4
+    assert result[0]["manuals"][0]["index_status"] == "indexed"
+    assert result[0]["manuals"][1]["indexed"] is False
+    assert result[0]["manuals"][1]["indexed_point_count"] == 0
+    assert result[0]["manuals"][1]["index_status"] == "not_indexed"
 
 
 def test_upload_manual_endpoint_rejects_non_pdf() -> None:

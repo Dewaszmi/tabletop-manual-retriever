@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from tabletop_manual_retriever.ingest.service import IngestResult
+from tabletop_manual_retriever.ingest.service import DeingestResult, IngestResult
 
 
 class IngestRequest(BaseModel):
@@ -38,6 +38,33 @@ class IngestResponse(BaseModel):
                     parsed_path=manual.parsed_path,
                     page_count=manual.page_count,
                     chunk_count=manual.chunk_count,
+                    point_count=manual.point_count,
+                )
+                for manual in result.manuals
+            ],
+        )
+
+
+class DeingestManualResponse(BaseModel):
+    filename: str | None
+    point_count: int
+
+
+class DeingestResponse(BaseModel):
+    game_slug: str
+    collection_name: str
+    total_points: int
+    manuals: list[DeingestManualResponse]
+
+    @classmethod
+    def from_result(cls, result: DeingestResult) -> "DeingestResponse":
+        return cls(
+            game_slug=result.game_slug,
+            collection_name=result.collection_name,
+            total_points=result.total_points,
+            manuals=[
+                DeingestManualResponse(
+                    filename=manual.filename,
                     point_count=manual.point_count,
                 )
                 for manual in result.manuals

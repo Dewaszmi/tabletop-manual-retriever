@@ -7,7 +7,11 @@ from fastapi.testclient import TestClient
 
 from tabletop_manual_retriever.ingest.service import RetrievedChunk
 from tabletop_manual_retriever.main import app
-from tabletop_manual_retriever.rag.llm import LlmError, OpenAICompatibleAnswerGenerator
+from tabletop_manual_retriever.rag.llm import (
+    ConversationMessage,
+    LlmError,
+    OpenAICompatibleAnswerGenerator,
+)
 from tabletop_manual_retriever.rag.router import get_rag_service
 from tabletop_manual_retriever.rag.service import RagService
 
@@ -40,6 +44,7 @@ class FakeAnswerGenerator:
         question: str,
         game_slug: str,
         sources: Sequence[RetrievedChunk],
+        history: Sequence[ConversationMessage] = (),
     ) -> str:
         return "On your turn, roll the dice and move."
 
@@ -81,6 +86,7 @@ def test_query_endpoint_returns_rag_response(rag_client: TestClient) -> None:
     assert payload["game_slug"] == "catan"
     assert payload["question"] == "What happens on my turn?"
     assert payload["sources"][0]["text"] == "Roll the dice on your turn."
+    assert payload["sources"][0]["excerpt"] == "Roll the dice on your turn."
     assert payload["sources"][0]["page_number"] == 2
     assert "Roll the dice on your turn." in payload["answer"]
     assert payload["answer_mode"] == "excerpt"
