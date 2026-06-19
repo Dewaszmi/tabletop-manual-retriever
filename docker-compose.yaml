@@ -6,6 +6,8 @@ services:
     environment:
       UPLOADS_DIR: /app/data/uploads
       CHAT_DB_PATH: /app/data/chats.sqlite3
+      HF_HOME: /app/cache/huggingface
+      SENTENCE_TRANSFORMERS_HOME: /app/cache/sentence-transformers
       QDRANT_URL: http://qdrant:6333
       RAG_TOP_K: 10
       RAG_CANDIDATE_K: ${RAG_CANDIDATE_K:-30}
@@ -17,6 +19,7 @@ services:
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS}
     volumes:
       - ./data:/app/data:z
+      - hf_cache:/app/cache
     depends_on:
       qdrant:
         condition: service_healthy
@@ -55,3 +58,4 @@ networks:
 
 volumes:
   qdrant_data:
+  hf_cache:
