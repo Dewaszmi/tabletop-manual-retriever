@@ -30,9 +30,27 @@ def _int_env(name: str, default: int) -> int:
         raise ValueError(f"{name} must be an integer") from exc
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean")
+
+
 CHUNK_MAX_CHARS = _int_env("CHUNK_MAX_CHARS", 1200)
 CHUNK_OVERLAP_CHARS = _int_env("CHUNK_OVERLAP_CHARS", 150)
 RAG_TOP_K = _int_env("RAG_TOP_K", 10)
+RAG_CANDIDATE_K = _int_env("RAG_CANDIDATE_K", max(RAG_TOP_K, 30))
+RAG_RERANK_ENABLED = _bool_env("RAG_RERANK_ENABLED", False)
+RAG_RERANK_MODEL = os.environ.get(
+    "RAG_RERANK_MODEL",
+    "cross-encoder/ms-marco-MiniLM-L-6-v2",
+).strip()
 
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "").strip().rstrip("/")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "").strip()

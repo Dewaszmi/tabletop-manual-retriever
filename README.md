@@ -73,7 +73,10 @@ Defaults are set in `docker-compose.yaml`. Common overrides:
 | `LLM_BASE_URL`        | `https://generativelanguage.googleapis.com/v1beta/openai` | OpenAI-compatible chat API                      |
 | `LLM_TIMEOUT_SECONDS` | `120`                                                     | LLM request timeout                             |
 | `QDRANT_COLLECTION`   | `manual_chunks`                                           | Vector collection name                          |
-| `RAG_TOP_K`           | `10`                                                      | Number of chunks retrieved per query            |
+| `RAG_TOP_K`           | `10`                                                      | Number of chunks sent to the LLM after reranking |
+| `RAG_CANDIDATE_K`     | `30`                                                      | Number of vector candidates considered before reranking |
+| `RAG_RERANK_ENABLED`  | `true`                                                    | Enable cross-encoder reranking in Docker Compose |
+| `RAG_RERANK_MODEL`    | `cross-encoder/ms-marco-MiniLM-L-6-v2`                    | SentenceTransformers cross-encoder model        |
 
 If `LLM_BASE_URL` / `LLM_MODEL` are unset, `/query` falls back to returning retrieved excerpts (`answer_mode: "excerpt"`).
 
