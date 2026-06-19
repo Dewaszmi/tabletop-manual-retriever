@@ -1,51 +1,49 @@
 # tabletop-manual-retriever
 
-LLM-powered retrieval from tabletop game manuals.
+Upload tabletop rulebook PDFs, index them into a vector store, and ask natural-language rules questions grounded in the manual text.
 
-Upload rulebook PDFs, index them into a vector store, then ask natural-language questions grounded in the manual text.
+The web UI covers the full workflow: upload manuals, ingest them into Qdrant, and chat with retrieved passages plus an LLM answer. Conversations are saved and can be resumed later.
+
+## Features
+
+- **PDF library** — upload one or many rulebooks per game (`/games/{game_slug}/manuals`)
+- **Ingestion** — parse, chunk, embed, and upsert into [Qdrant](https://qdrant.tech/)
+- **Hybrid retrieval** — dense vector search + BM25 keyword search, fused with reciprocal rank fusion (RRF)
+- **Reranking** — cross-encoder rescores candidates before the top passages are sent to the LLM
+- **Grounded answers** — any OpenAI-compatible chat API (Gemini by default); falls back to raw excerpts when no LLM is configured
+- **Chat history** — multi-turn conversations stored in SQLite, with source citations per answer
 
 ## Quick start (Docker Compose)
 
-Recommended way to run everything: API, Qdrant, and Ollama.
-
-**1. Pull the LLM model** (once, on the host — Compose reuses `~/.ollama`):
+**1. Configure environment**
 
 ```bash
-ollama pull llama3.2
+cp .env.example .env
 ```
 
-**2. Start the stack:**
+Edit `.env` and set `GEMINI_API_KEY` (free key from [Google AI Studio](https://aistudio.google.com/apikey)). See [`.env.example`](.env.example) for all options.
+
+**2. Start the stack**
 
 ```bash
 docker compose up --build -d
 ```
 
-**3. Open the web UI:**
+This starts the API, Qdrant, and an optional Ollama service (only needed if you switch the LLM settings to a local model).
+
+**3. Open the web UI**
 
 ```text
 http://127.0.0.1:8000/
 ```
 
-**4. Upload a manual** for a game (e.g. `monopoly`), click **Ingest** on the PDF, then use **Ask the rules** to query it.
+**4. Use the app**
 
-Or use the API:
+1. **Upload** — add PDF rulebooks for a game (e.g. `catan`, `monopoly`)
+2. **Library** — click **Ingest** on each manual (or ingest all) to index chunks into Qdrant
+3. **Ask the rules** — pick a game and ask questions; expand **Sources** on each answer to see ranked passages
 
-```bash
-# Upload
-curl -F "file=@/path/to/rules.pdf" http://127.0.0.1:8000/games/monopoly/manuals
-
-# Index into Qdrant
-curl -X POST http://127.0.0.1:8000/ingest \
-  -H "Content-Type: application/json" \
-  -d '{"game_slug":"monopoly"}'
-
-# Ask a question (retrieval + LLM)
-curl -s -X POST http://127.0.0.1:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"game_slug":"monopoly","question":"How do I win?"}' | jq '{answer_mode, answer}'
-```
-
-The first LLM query may take 30–60 seconds while the model loads.
+The first query after a fresh install may take a minute while embedding and reranker models download into the Docker volume cache.
 
 **Stop:**
 
@@ -55,74 +53,83 @@ docker compose down
 
 ### Services
 
-| Service      | URL                    |
-| ------------ | ---------------------- |
-| Web UI / API | http://127.0.0.1:8000/ |
-| Qdrant       | http://127.0.0.1:6333  |
+| Service      | URL                    | Notes                                      |
+| ------------ | ---------------------- | ------------------------------------------ |
+| Web UI / API | http://127.0.0.1:8000/ | FastAPI + static frontend                  |
+| Qdrant       | http://127.0.0.1:6333  | Vector database                            |
+| Ollama       | internal only          | Optional local LLM; not exposed on host    |
 
-Compose runs Ollama internally at `http://ollama:11434` (not exposed on the host). It mounts `${HOME}/.ollama` so models you already pulled with the host `ollama` CLI are reused.
+Persistent data:
 
-### Environment variables
+- `./data/` — uploaded PDFs, parsed JSON, chat database
+- Docker volume `qdrant_data` — vector index
+- Docker volume `hf_cache` — Hugging Face / SentenceTransformers model cache
 
-Defaults are set in `docker-compose.yaml`. Common overrides:
+## How retrieval works
 
-| Variable              | Default                                                   | Purpose                                         |
-| --------------------- | --------------------------------------------------------- | ----------------------------------------------- |
-| `GEMINI_API_KEY`      | required                                                  | Google AI Studio API key used by Docker Compose |
-| `HF_HOME`             | `/app/cache/huggingface`                                  | Persistent Hugging Face model cache             |
-| `LLM_MODEL`           | `gemini-2.5-flash`                                        | OpenAI-compatible chat model                    |
-| `LLM_BASE_URL`        | `https://generativelanguage.googleapis.com/v1beta/openai` | OpenAI-compatible chat API                      |
-| `LLM_TIMEOUT_SECONDS` | `120`                                                     | LLM request timeout                             |
-| `QDRANT_COLLECTION`   | `manual_chunks`                                           | Vector collection name                          |
-| `RAG_TOP_K`           | `10`                                                      | Number of chunks sent to the LLM after reranking |
-| `RAG_CANDIDATE_K`     | `30`                                                      | Number of vector candidates considered before reranking |
-| `RAG_HYBRID_ENABLED`  | `false`                                                   | Add BM25 text candidates before reranking       |
-| `RAG_HYBRID_RRF_K`    | `60`                                                      | Reciprocal-rank fusion smoothing constant       |
-| `RAG_RERANK_ENABLED`  | `true`                                                    | Enable cross-encoder reranking in Docker Compose |
-| `RAG_RERANK_MODEL`    | `cross-encoder/ms-marco-MiniLM-L-6-v2`                    | SentenceTransformers cross-encoder model        |
-| `RAG_TEXT_CANDIDATE_K` | `30`                                                     | Number of BM25 text candidates considered before reranking |
-| `RAG_TEXT_MAX_CHUNKS` | `5000`                                                    | Maximum stored chunks scanned for BM25 candidates |
-| `SENTENCE_TRANSFORMERS_HOME` | `/app/cache/sentence-transformers`                 | Persistent SentenceTransformers model cache     |
+For each question the pipeline:
 
-If `LLM_BASE_URL` / `LLM_MODEL` are unset, `/query` falls back to returning retrieved excerpts (`answer_mode: "excerpt"`).
+1. **Embeds** the question (plus recent conversation context) with `BAAI/bge-small-en-v1.5`
+2. **Searches** Qdrant for the closest chunk vectors
+3. **Optionally merges** BM25 keyword hits with vector hits via RRF (`RAG_HYBRID_ENABLED`)
+4. **Reranks** the candidate pool with a cross-encoder (`RAG_RERANK_MODEL`)
+5. **Returns** the top `RAG_TOP_K` passages, sorted by rerank score (highest first)
+6. **Generates** an answer from the LLM using numbered source citations `[1]`, `[2]`, …
+
+Source scores are reranker outputs. With `BAAI/bge-reranker-base` they are typically in the 0–1 range. Older MiniLM rerankers emit raw logits that can be negative; higher is always better.
+
+The LLM may cite `[3]` before `[1]` in prose if that passage fits the sentence better — the **Sources** list is always ordered by score.
+
+### Using Ollama instead of Gemini
+
+Ollama is included in Compose but not used unless you point the LLM settings at it:
+
+```env
+LLM_BASE_URL=http://ollama:11434/v1
+LLM_MODEL=llama3.2:latest
+GEMINI_API_KEY=ollama
+```
+
+Pull the model once on the host (Compose mounts `~/.ollama`):
+
+```bash
+ollama pull llama3.2
+```
 
 ## Local development (without Docker)
 
-**Setup:**
+**Setup**
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pip install -r requirements.txt
+cp .env.example .env
+# edit .env — set QDRANT_URL=http://127.0.0.1:6333 and LLM_* as needed
 ```
 
-**Run Qdrant** (required for ingest/query):
+**Run Qdrant** (required for ingest and query):
 
 ```bash
 docker run --rm -p 6333:6333 qdrant/qdrant
 ```
 
-**Run Ollama** (required for LLM answers):
+**Start the API**
 
 ```bash
-ollama pull llama3.2
-ollama serve
-```
-
-**Start the API:**
-
-```bash
-export LLM_BASE_URL=http://127.0.0.1:11434/v1
-export LLM_MODEL=llama3.2:latest
+set -a && source .env && set +a
 PYTHONPATH=src uvicorn tabletop_manual_retriever.main:app --reload
 ```
 
-Then open http://127.0.0.1:8000/
+Open http://127.0.0.1:8000/
+
+Note: local runs use Python defaults from `config.py` unless you export the `RAG_*` variables. Hybrid search and reranking are **off** by default outside Docker unless you set `RAG_HYBRID_ENABLED=true` and `RAG_RERANK_ENABLED=true`.
+
 
 ## CLI: parse a manual
 
-Drop a PDF into `data/uploads/<game-slug>/`, then:
+Drop a PDF into `data/uploads/<game-slug>/`, or point at any file:
 
 ```bash
 parse-manual data/uploads/catan/rules.pdf
@@ -130,61 +137,3 @@ parse-manual data/uploads/catan/rules.pdf --page 3
 parse-manual data/uploads/catan/rules.pdf --json
 ```
 
-## API overview
-
-Upload manuals:
-
-```bash
-curl -F "file=@/path/to/rules.pdf" http://127.0.0.1:8000/games/catan/manuals
-curl -F "files=@/path/to/base-rules.pdf" -F "files=@/path/to/seafarers.pdf" http://127.0.0.1:8000/games/catan/manuals
-```
-
-Replace an existing file:
-
-```bash
-curl -F "file=@/path/to/rules.pdf" "http://127.0.0.1:8000/games/catan/manuals?overwrite=true"
-```
-
-List library:
-
-```bash
-curl http://127.0.0.1:8000/games/library
-```
-
-Ingest into Qdrant:
-
-```bash
-curl -X POST http://127.0.0.1:8000/ingest \
-  -H "Content-Type: application/json" \
-  -d '{"game_slug":"catan"}'
-```
-
-Query with RAG:
-
-```bash
-curl -X POST http://127.0.0.1:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"game_slug":"catan","question":"How many cards do I draw?"}'
-```
-
-## Project layout
-
-```
-src/tabletop_manual_retriever/
-  main.py        # FastAPI app
-  config.py      # env config
-  ingest/        # parse, chunk, embed, upsert to Qdrant
-  rag/           # retrieve chunks + LLM answer
-  storage/       # save/list uploaded PDFs
-  upload/        # upload/list game manuals
-  web/           # web UI
-  cli.py         # parse-manual command
-tests/
-data/uploads/    # uploaded manuals, one folder per game
-```
-
-## Tests
-
-```bash
-pytest
-```
