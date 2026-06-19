@@ -90,6 +90,16 @@ class VectorStore(Protocol):
     ) -> list[RetrievedChunk]:
         """Return the closest stored chunks for a query vector."""
 
+    def list_chunks(
+        self,
+        *,
+        collection_name: str,
+        game_slug: str,
+        filename: str | None = None,
+        limit: int | None = None,
+    ) -> list[RetrievedChunk]:
+        """Return stored chunks matching the filters without vector scoring."""
+
 
 @dataclass(frozen=True)
 class IngestedManual:
@@ -383,27 +393,89 @@ class QdrantVectorStore:
         results: list[RetrievedChunk] = []
         for hit in hits:
             payload = hit.payload or {}
-            text = payload.get("text")
-            page_number = payload.get("page_number")
-            chunk_index = payload.get("chunk_index")
-            hit_filename = payload.get("filename")
-            if (
-                not isinstance(text, str)
-                or not isinstance(page_number, int)
-                or not isinstance(chunk_index, int)
-                or not isinstance(hit_filename, str)
-            ):
-                continue
-            results.append(
-                RetrievedChunk(
-                    text=text,
-                    page_number=page_number,
-                    chunk_index=chunk_index,
-                    filename=hit_filename,
-                    score=float(hit.score or 0.0),
-                )
+            chunk = _retrieved_chunk_from_payload(
+                payload,
+                score=float(hit.score or 0.0),
             )
+            if chunk is not None:
+                results.append(chunk)
         return results
+
+    def list_chunks(
+        self,
+        *,
+        collection_name: str,
+        game_slug: str,
+        filename: str | None = None,
+        limit: int | None = None,
+    ) -> list[RetrievedChunk]:
+        if limit is not None and limit < 1:
+            return []
+
+        try:
+            from qdrant_client import QdrantClient, models
+        except ImportError as exc:
+            raise IngestDependencyError(
+                "Install qdrant-client to list chunks from Qdrant."
+            ) from exc
+
+        try:
+            if self._client is None:
+                self._client = QdrantClient(
+                    url=self.url,
+                    check_compatibility=False,
+                )
+
+            if not self._client.collection_exists(collection_name=collection_name):
+                return []
+
+            filter_conditions = [
+                models.FieldCondition(
+                    key="game_slug",
+                    match=models.MatchValue(value=game_slug),
+                )
+            ]
+            if filename is not None:
+                filter_conditions.append(
+                    models.FieldCondition(
+                        key="filename",
+                        match=models.MatchValue(value=filename),
+                    )
+                )
+
+            results: list[RetrievedChunk] = []
+            next_offset = None
+            while True:
+                remaining = None if limit is None else limit - len(results)
+                if remaining is not None and remaining <= 0:
+                    break
+
+                page_limit = min(256, remaining) if remaining is not None else 256
+                records, next_offset = self._client.scroll(
+                    collection_name=collection_name,
+                    scroll_filter=models.Filter(must=filter_conditions),
+                    limit=page_limit,
+                    offset=next_offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+
+                for record in records:
+                    chunk = _retrieved_chunk_from_payload(
+                        record.payload or {},
+                        score=0.0,
+                    )
+                    if chunk is not None:
+                        results.append(chunk)
+                        if limit is not None and len(results) >= limit:
+                            break
+
+                if next_offset is None:
+                    break
+
+            return results
+        except Exception as exc:
+            raise IngestStoreError(f"Could not list chunks from Qdrant: {exc}") from exc
 
 
 @dataclass
@@ -526,6 +598,31 @@ def _relative_path(path: Path) -> str:
         return str(path.resolve().relative_to(PROJECT_ROOT))
     except ValueError:
         return str(path.resolve())
+
+
+def _retrieved_chunk_from_payload(
+    payload: dict,
+    *,
+    score: float,
+) -> RetrievedChunk | None:
+    text = payload.get("text")
+    page_number = payload.get("page_number")
+    chunk_index = payload.get("chunk_index")
+    filename = payload.get("filename")
+    if (
+        not isinstance(text, str)
+        or not isinstance(page_number, int)
+        or not isinstance(chunk_index, int)
+        or not isinstance(filename, str)
+    ):
+        return None
+    return RetrievedChunk(
+        text=text,
+        page_number=page_number,
+        chunk_index=chunk_index,
+        filename=filename,
+        score=score,
+    )
 
 
 def _point_id(game_slug: str, filename: str, chunk_index: int) -> str:

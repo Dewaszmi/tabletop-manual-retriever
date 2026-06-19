@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import math
+import re
+from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Protocol
 
 from tabletop_manual_retriever.config import (
     LLM_API_KEY,
@@ -9,6 +13,13 @@ from tabletop_manual_retriever.config import (
     LLM_MODEL,
     LLM_TIMEOUT_SECONDS,
     QDRANT_COLLECTION,
+    RAG_CANDIDATE_K,
+    RAG_HYBRID_ENABLED,
+    RAG_HYBRID_RRF_K,
+    RAG_RERANK_ENABLED,
+    RAG_RERANK_MODEL,
+    RAG_TEXT_CANDIDATE_K,
+    RAG_TEXT_MAX_CHUNKS,
     RAG_TOP_K,
 )
 from tabletop_manual_retriever.ingest.service import (
@@ -31,6 +42,7 @@ from tabletop_manual_retriever.storage.manuals import sanitize_pdf_filename, val
 
 SOURCE_EXCERPT_MAX_CHARS = 280
 MAX_HISTORY_MESSAGES = 12
+_TOKEN_PATTERN = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)?")
 
 
 class RagDependencyError(IngestDependencyError):
@@ -39,6 +51,17 @@ class RagDependencyError(IngestDependencyError):
 
 class RagStoreError(IngestStoreError):
     """Raised when chunks cannot be read from the vector store."""
+
+
+class ChunkReranker(Protocol):
+    def rerank(
+        self,
+        *,
+        query: str,
+        chunks: Sequence[RetrievedChunk],
+        limit: int,
+    ) -> list[RetrievedChunk]:
+        """Return chunks ordered by cross-encoder relevance."""
 
 
 @dataclass(frozen=True)
@@ -57,15 +80,24 @@ class RagResult:
 class RagService:
     embedder: TextEmbedder | None = None
     vector_store: VectorStore | None = None
+    reranker: ChunkReranker | None = None
     answer_generator: AnswerGenerator | None = None
     collection_name: str = QDRANT_COLLECTION
     top_k: int = RAG_TOP_K
+    candidate_k: int = RAG_CANDIDATE_K
+    hybrid_enabled: bool = RAG_HYBRID_ENABLED
+    hybrid_rrf_k: int = RAG_HYBRID_RRF_K
+    rerank_enabled: bool = RAG_RERANK_ENABLED
+    text_candidate_k: int = RAG_TEXT_CANDIDATE_K
+    text_max_chunks: int = RAG_TEXT_MAX_CHUNKS
 
     def __post_init__(self) -> None:
         if self.embedder is None:
             self.embedder = FastEmbedTextEmbedder()
         if self.vector_store is None:
             self.vector_store = QdrantVectorStore()
+        if self.reranker is None and self.rerank_enabled:
+            self.reranker = SentenceTransformersCrossEncoderReranker()
         if self.answer_generator is None:
             self.answer_generator = _default_answer_generator()
 
@@ -87,6 +119,12 @@ class RagService:
             sanitize_pdf_filename(filename) if filename is not None else None
         )
         limit = top_k if top_k is not None else self.top_k
+        candidate_limit = _candidate_limit(
+            final_limit=limit,
+            candidate_limit=self.candidate_k,
+            reranker=self.reranker,
+            hybrid_enabled=self.hybrid_enabled,
+        )
         conversation_history = _normalize_history(history or ())
 
         assert self.embedder is not None
@@ -103,9 +141,40 @@ class RagService:
                 vector=query_vector,
                 game_slug=slug,
                 filename=manual_filename,
-                limit=limit,
+                limit=candidate_limit,
             )
         )
+        if self.hybrid_enabled:
+            if not hasattr(self.vector_store, "list_chunks"):
+                raise RagStoreError("Vector store does not support hybrid search.")
+            text_sources = _text_search(
+                query=normalized_question,
+                chunks=self.vector_store.list_chunks(
+                    collection_name=self.collection_name,
+                    game_slug=slug,
+                    filename=manual_filename,
+                    limit=self.text_max_chunks,
+                ),
+                limit=self.text_candidate_k,
+            )
+            sources = tuple(
+                _merge_hybrid_results(
+                    vector_sources=sources,
+                    text_sources=text_sources,
+                    limit=candidate_limit,
+                    rrf_k=self.hybrid_rrf_k,
+                )
+            )
+        if self.reranker is not None:
+            sources = tuple(
+                self.reranker.rerank(
+                    query=retrieval_query,
+                    chunks=sources,
+                    limit=limit,
+                )
+            )
+        else:
+            sources = sources[:limit]
         context = _build_context(sources, history=conversation_history)
         answer, answer_mode = _build_answer(
             question=normalized_question,
@@ -132,6 +201,47 @@ class RagService:
         )
 
 
+class SentenceTransformersCrossEncoderReranker:
+    def __init__(self, model_name: str = RAG_RERANK_MODEL) -> None:
+        if not model_name:
+            raise RagDependencyError("RAG_RERANK_MODEL cannot be empty.")
+        self.model_name = model_name
+        self._model = None
+
+    def rerank(
+        self,
+        *,
+        query: str,
+        chunks: Sequence[RetrievedChunk],
+        limit: int,
+    ) -> list[RetrievedChunk]:
+        if limit < 1 or not chunks:
+            return []
+        if len(chunks) == 1:
+            return list(chunks[:limit])
+
+        if self._model is None:
+            try:
+                from sentence_transformers import CrossEncoder
+            except ImportError as exc:
+                raise RagDependencyError(
+                    "Install sentence-transformers to use cross-encoder reranking."
+                ) from exc
+            self._model = CrossEncoder(self.model_name)
+
+        pairs = [(query, chunk.text) for chunk in chunks]
+        scores = self._model.predict(pairs)
+        scored_chunks = [
+            replace(chunk, score=float(score))
+            for chunk, score in zip(chunks, scores, strict=True)
+        ]
+        return sorted(
+            scored_chunks,
+            key=lambda chunk: chunk.score,
+            reverse=True,
+        )[:limit]
+
+
 def _default_answer_generator() -> AnswerGenerator | None:
     if not LLM_BASE_URL or not LLM_MODEL:
         return None
@@ -141,6 +251,140 @@ def _default_answer_generator() -> AnswerGenerator | None:
         api_key=LLM_API_KEY,
         timeout_seconds=LLM_TIMEOUT_SECONDS,
     )
+
+
+def _candidate_limit(
+    *,
+    final_limit: int,
+    candidate_limit: int,
+    reranker: ChunkReranker | None,
+    hybrid_enabled: bool,
+) -> int:
+    if reranker is None and not hybrid_enabled:
+        return final_limit
+    return max(final_limit, candidate_limit)
+
+
+def _text_search(
+    *,
+    query: str,
+    chunks: Sequence[RetrievedChunk],
+    limit: int,
+) -> list[RetrievedChunk]:
+    if limit < 1 or not chunks:
+        return []
+
+    query_tokens = _tokenize(query)
+    if not query_tokens:
+        return []
+
+    tokenized_chunks = [_tokenize(chunk.text) for chunk in chunks]
+    doc_count = len(tokenized_chunks)
+    average_doc_length = (
+        sum(len(tokens) for tokens in tokenized_chunks) / doc_count
+        if doc_count
+        else 0.0
+    )
+    if average_doc_length <= 0:
+        return []
+
+    document_frequencies: Counter[str] = Counter()
+    for tokens in tokenized_chunks:
+        document_frequencies.update(set(tokens))
+
+    scored_chunks: list[RetrievedChunk] = []
+    for chunk, tokens in zip(chunks, tokenized_chunks, strict=True):
+        score = _bm25_score(
+            query_tokens=query_tokens,
+            document_tokens=tokens,
+            document_frequencies=document_frequencies,
+            document_count=doc_count,
+            average_doc_length=average_doc_length,
+        )
+        if score > 0:
+            scored_chunks.append(replace(chunk, score=score))
+
+    return sorted(
+        scored_chunks,
+        key=lambda chunk: chunk.score,
+        reverse=True,
+    )[:limit]
+
+
+def _bm25_score(
+    *,
+    query_tokens: Sequence[str],
+    document_tokens: Sequence[str],
+    document_frequencies: Counter[str],
+    document_count: int,
+    average_doc_length: float,
+) -> float:
+    term_frequencies = Counter(document_tokens)
+    document_length = len(document_tokens)
+    if document_length == 0:
+        return 0.0
+
+    k1 = 1.5
+    b = 0.75
+    score = 0.0
+    for token in set(query_tokens):
+        term_frequency = term_frequencies[token]
+        if term_frequency == 0:
+            continue
+
+        frequency = document_frequencies[token]
+        idf = math.log(1 + (document_count - frequency + 0.5) / (frequency + 0.5))
+        denominator = term_frequency + k1 * (
+            1 - b + b * document_length / average_doc_length
+        )
+        score += idf * term_frequency * (k1 + 1) / denominator
+    return score
+
+
+def _merge_hybrid_results(
+    *,
+    vector_sources: Sequence[RetrievedChunk],
+    text_sources: Sequence[RetrievedChunk],
+    limit: int,
+    rrf_k: int,
+) -> list[RetrievedChunk]:
+    if limit < 1:
+        return []
+    if rrf_k < 1:
+        raise ValueError("RAG_HYBRID_RRF_K must be greater than zero")
+
+    chunks: dict[tuple[str, int], RetrievedChunk] = {}
+    scores: Counter[tuple[str, int]] = Counter()
+    first_ranks: dict[tuple[str, int], int] = {}
+
+    for rank, source in enumerate(vector_sources, start=1):
+        key = _chunk_key(source)
+        chunks.setdefault(key, source)
+        first_ranks.setdefault(key, rank)
+        scores[key] += 1 / (rrf_k + rank)
+
+    offset = len(vector_sources)
+    for rank, source in enumerate(text_sources, start=1):
+        key = _chunk_key(source)
+        chunks.setdefault(key, source)
+        first_ranks.setdefault(key, offset + rank)
+        scores[key] += 1 / (rrf_k + rank)
+
+    return [
+        replace(chunks[key], score=float(score))
+        for key, score in sorted(
+            scores.items(),
+            key=lambda item: (-item[1], first_ranks[item[0]]),
+        )[:limit]
+    ]
+
+
+def _chunk_key(chunk: RetrievedChunk) -> tuple[str, int]:
+    return (chunk.filename, chunk.chunk_index)
+
+
+def _tokenize(text: str) -> list[str]:
+    return _TOKEN_PATTERN.findall(text.lower())
 
 
 def _normalize_history(

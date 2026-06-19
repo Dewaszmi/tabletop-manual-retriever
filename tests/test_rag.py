@@ -110,6 +110,88 @@ def test_rag_service_uses_llm_answer_generator() -> None:
     assert result.answer_mode == "llm"
 
 
+def test_rag_service_reranks_vector_candidates() -> None:
+    class CandidateVectorStore(FakeVectorStore):
+        def search_chunks(self, **kwargs) -> list[RetrievedChunk]:
+            assert kwargs["limit"] == 4
+            return [
+                RetrievedChunk(
+                    text="Longest road breaks ties.",
+                    page_number=8,
+                    chunk_index=0,
+                    filename="rules.pdf",
+                    score=0.91,
+                ),
+                RetrievedChunk(
+                    text="Reach 10 victory points to win.",
+                    page_number=3,
+                    chunk_index=1,
+                    filename="rules.pdf",
+                    score=0.72,
+                ),
+                RetrievedChunk(
+                    text="Development cards stay hidden.",
+                    page_number=5,
+                    chunk_index=2,
+                    filename="rules.pdf",
+                    score=0.68,
+                ),
+                RetrievedChunk(
+                    text="Settlements are worth 1 point each.",
+                    page_number=4,
+                    chunk_index=3,
+                    filename="rules.pdf",
+                    score=0.61,
+                ),
+            ]
+
+    class FakeReranker:
+        def __init__(self) -> None:
+            self.query = ""
+
+        def rerank(
+            self,
+            *,
+            query: str,
+            chunks: Sequence[RetrievedChunk],
+            limit: int,
+        ) -> list[RetrievedChunk]:
+            from dataclasses import replace
+
+            self.query = query
+            scores = {
+                "Reach 10 victory points to win.": 9.5,
+                "Settlements are worth 1 point each.": 7.0,
+                "Longest road breaks ties.": 2.0,
+                "Development cards stay hidden.": 1.0,
+            }
+            reranked = [
+                replace(chunk, score=scores[chunk.text])
+                for chunk in chunks
+            ]
+            return sorted(reranked, key=lambda chunk: chunk.score, reverse=True)[:limit]
+
+    reranker = FakeReranker()
+    service = RagService(
+        embedder=FakeEmbedder(),
+        vector_store=CandidateVectorStore(),
+        reranker=reranker,
+        answer_generator=None,
+        top_k=2,
+        candidate_k=4,
+    )
+
+    result = service.query(
+        game_slug="catan",
+        question="How do I win?",
+    )
+
+    assert reranker.query == "How do I win?"
+    assert [source.chunk_index for source in result.sources] == [1, 3]
+    assert [source.score for source in result.sources] == [9.5, 7.0]
+    assert result.context.startswith("Reach 10 victory points")
+
+
 def test_rag_service_uses_history_for_retrieval_and_answer() -> None:
     class CapturingEmbedder:
         def __init__(self) -> None:
