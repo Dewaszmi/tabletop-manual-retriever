@@ -76,8 +76,12 @@ Defaults are set in `docker-compose.yaml`. Common overrides:
 | `QDRANT_COLLECTION`   | `manual_chunks`                                           | Vector collection name                          |
 | `RAG_TOP_K`           | `10`                                                      | Number of chunks sent to the LLM after reranking |
 | `RAG_CANDIDATE_K`     | `30`                                                      | Number of vector candidates considered before reranking |
+| `RAG_HYBRID_ENABLED`  | `false`                                                   | Add BM25 text candidates before reranking       |
+| `RAG_HYBRID_RRF_K`    | `60`                                                      | Reciprocal-rank fusion smoothing constant       |
 | `RAG_RERANK_ENABLED`  | `true`                                                    | Enable cross-encoder reranking in Docker Compose |
 | `RAG_RERANK_MODEL`    | `cross-encoder/ms-marco-MiniLM-L-6-v2`                    | SentenceTransformers cross-encoder model        |
+| `RAG_TEXT_CANDIDATE_K` | `30`                                                     | Number of BM25 text candidates considered before reranking |
+| `RAG_TEXT_MAX_CHUNKS` | `5000`                                                    | Maximum stored chunks scanned for BM25 candidates |
 | `SENTENCE_TRANSFORMERS_HOME` | `/app/cache/sentence-transformers`                 | Persistent SentenceTransformers model cache     |
 
 If `LLM_BASE_URL` / `LLM_MODEL` are unset, `/query` falls back to returning retrieved excerpts (`answer_mode: "excerpt"`).
